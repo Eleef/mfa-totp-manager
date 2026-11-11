@@ -7,8 +7,8 @@
  *                                                     │
  *   Uhr tickt ────────────────────────────────────────┴──► strip.update(now)
  *
- * The local-manager extension persists input and optional account passwords in
- * browser storage by default. The original encrypted vault remains optional.
+ * The local-manager extension keeps the input as a draft. Only submitted
+ * accounts and their optional passwords are persisted in browser storage.
  * See entry-manager.ts and web/README.md for the storage boundary.
  */
 
@@ -33,14 +33,6 @@ import { startVaultPanel } from './vault-panel';
 import { startEntryManager } from './entry-manager';
 
 /**
- * Wartezeit nach dem letzten Tastendruck, bevor neu ausgewertet wird.
- *
- * Ohne diese Pause blitzt beim Eintippen eines Secrets nach jedem Zeichen eine
- * Fehlerzeile auf — nur um beim nächsten Zeichen wieder zu verschwinden.
- */
-const INPUT_DEBOUNCE_MS = 220;
-
-/**
  * Ab wie vielen Konten die Bühne ein Filterfeld bekommt — und zweispaltig
  * werden darf.
  *
@@ -55,7 +47,8 @@ const INPUT_DEBOUNCE_MS = 220;
 const DENSE_FROM = 8;
 
 export function startApp(): void {
-  let entryManager: ReturnType<typeof startEntryManager> | undefined;
+  let entryManager: ReturnType<typeof startEntryManager> | undefined = undefined;
+  let savedText = '';
   const input = requireElement<HTMLTextAreaElement>(document, '#secrets');
   const device = requireElement(document, '.device');
   const stripHost = requireElement(document, '#strips');
@@ -105,7 +98,6 @@ export function startApp(): void {
 
   /** Kanalzüge nach ihrem Schlüssel — damit beim Tippen nur Geändertes neu entsteht. */
   let strips = new Map<string, Strip>();
-  let debounceTimer = 0;
 
   /**
    * Der Text, gegen den der Filter sucht — je Kanalzug einmal vorbereitet.
@@ -331,33 +323,32 @@ export function startApp(): void {
   }
 
   function reparse(): void {
-    render(parseEntries(input.value));
+    render(parseEntries(savedText));
     entryManager?.sync();
   }
 
-  input.addEventListener('input', () => {
-    // Die Tasten hängen am Feldinhalt und dürfen deshalb NICHT auf die
-    // Wartezeit warten: „Leeren" soll da sein, sobald das erste Zeichen steht,
-    // nicht eine Fünftelsekunde später. Die Bühne wechselt weiter erst nach dem
-    // Auswerten — sie hängt an den Einträgen, nicht am Tippen.
+  function refreshDraft(): void {
     paintKeys();
-    window.clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(reparse, INPUT_DEBOUNCE_MS);
+    entryManager?.draftChanged();
+  }
+
+  input.addEventListener('input', () => {
+    refreshDraft();
   });
 
   // Beim Einfügen sofort reagieren: Da ist die Eingabe in einem Rutsch fertig,
   // eine Wartezeit wäre nur träge. Ein eingefügter Google-Export wird direkt
   // umgewandelt.
   input.addEventListener('paste', () => {
-    window.clearTimeout(debounceTimer);
     window.setTimeout(() => {
       expandMigrationLines();
-      reparse();
+      refreshDraft();
     }, 0);
   });
 
   keyClear.addEventListener('click', () => {
-    entryManager?.requestClear();
+    input.value = '';
+    refreshDraft();
   });
 
   /* ── Der Testschlüssel im Leerzustand ────────────────────────────────────
@@ -383,7 +374,7 @@ export function startApp(): void {
     }
     input.value = RFC_TEST_LINE;
     input.focus();
-    reparse();
+    refreshDraft();
   });
 
   /* ── Google-Authenticator-Export ─────────────────────────────────────────
@@ -427,7 +418,7 @@ export function startApp(): void {
     }
 
     input.value = expanded.join('\n');
-    reparse();
+    refreshDraft();
 
     const parts: string[] = [];
     if (imported > 0) {
@@ -450,7 +441,7 @@ export function startApp(): void {
       const existing = input.value.trim();
       input.value = existing === '' ? line : `${existing}\n${line}`;
       expandMigrationLines();
-      reparse();
+      refreshDraft();
       if (!isMigrationUri(line)) {
         setNote(t('scan.done'));
       }
@@ -471,6 +462,7 @@ export function startApp(): void {
       if (entryManager && text !== '') {
         entryManager.restoreVault(text);
       } else {
+        savedText = '';
         input.value = text;
         reparse();
       }
@@ -535,11 +527,12 @@ export function startApp(): void {
 
   startClock(tick);
   entryManager = startEntryManager({
-    read: () => input.value,
+    read: () => savedText,
     write(text): void {
-      input.value = text;
+      savedText = text;
       reparse();
     },
+    draftChanged: refreshDraft,
     vaultState: () => vaultState,
   });
   reparse();

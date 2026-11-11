@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { parseEntries, parseLine } from './accounts';
 import { encodeBase32 } from './base32';
-import { amendEntry, backup, nameEntry, readBackup, reconcilePasswords } from './entry-manager';
+import {
+  amendEntry,
+  backup,
+  nameEntry,
+  readBackup,
+  reconcilePasswords,
+  submitEntries,
+} from './entry-manager';
 
 // RFC 4226 public test secret, not a real account.
 const secret = encodeBase32(new TextEncoder().encode('12345678901234567890'), { padding: false });
@@ -9,6 +16,31 @@ const first = `GitHub: ${secret}`;
 const second = `Email: ${secret}`;
 
 describe('Clockwork local account management', () => {
+  it('appends a submitted draft while retaining existing accounts and passwords', () => {
+    const passwords = { [first]: 'demo-password' };
+    const saved = submitEntries(first, passwords, second);
+    expect(parseEntries(saved.text).map((entry) => entry.source)).toEqual([first, second]);
+    expect(saved.passwords).toEqual(passwords);
+  });
+
+  it('rejects a partially invalid draft without changing saved data', () => {
+    const saved = backup(first, { [first]: 'demo-password' });
+    expect(() => submitEntries(saved.text, saved.passwords, `${second}\nnot-a-secret!`)).toThrow();
+    expect(saved).toEqual(backup(first, { [first]: 'demo-password' }));
+  });
+
+  it('skips existing and repeated draft rows without losing account passwords', () => {
+    const passwords = { [first]: 'demo-password' };
+    const saved = submitEntries(first, passwords, `${first}\n${second}\n${second}`);
+    expect(parseEntries(saved.text).map((entry) => entry.source)).toEqual([first, second]);
+    expect(saved.passwords).toEqual(passwords);
+  });
+
+  it('refuses empty or comment-only submissions instead of replacing the saved list', () => {
+    expect(() => submitEntries(first, {}, '')).toThrow();
+    expect(() => submitEntries(first, {}, '# no accounts')).toThrow();
+  });
+
   it('renames URI entries without changing their TOTP settings', () => {
     const source = `otpauth://totp/Old?secret=${secret}&algorithm=SHA512&digits=8&period=60`;
     const renamed = parseLine(nameEntry(source, '工作账号 <test>'));

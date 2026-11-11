@@ -9,6 +9,21 @@ const strings = {
   password: ['账号密码', 'Account password'],
   remove: ['删除', 'Delete'],
   clear: ['清空全部', 'Clear all'],
+  clearDraft: ['清空输入', 'Clear input'],
+  draftLabel: [
+    '待添加账号（每行一个，点击提交后保存）',
+    'New accounts (one per line; submit to save)',
+  ],
+  submit: ['提交添加', 'Submit accounts'],
+  submitted: ['已提交，账号已保存', 'Submitted and saved'],
+  duplicateDraft: [
+    '这些账号已经存在，未重复添加。',
+    'These accounts already exist; no duplicates added.',
+  ],
+  invalidDraft: [
+    '输入中有无效密钥，请检查后重新提交；已保存的账号未修改。',
+    'The draft contains invalid secrets. Check and submit again; saved accounts were not changed.',
+  ],
   cancel: ['取消', 'Cancel'],
   save: ['保存', 'Save'],
   confirm: ['确认删除', 'Confirm deletion'],
@@ -43,8 +58,8 @@ const strings = {
   ],
   clearTitle: ['清空所有账号？', 'Clear all accounts?'],
   clearHelp: [
-    '将清空当前输入和所有账号密码。确认后可在 15 秒内撤销。',
-    'This clears the input and all account passwords. You can undo within 15 seconds.',
+    '将删除所有已保存账号及其密码。确认后可在 15 秒内撤销。',
+    'This deletes all saved accounts and passwords. You can undo within 15 seconds.',
   ],
   undo: ['撤销', 'Undo'],
   removed: ['已删除，可撤销', 'Deleted. Undo is available.'],
@@ -75,8 +90,8 @@ const strings = {
   ],
   exportConfirm: ['导出文件', 'Export file'],
   unsaved: [
-    '输入框保持原来的直接粘贴方式，每行一个账号；新增与修改会自动保存。',
-    'Paste directly below, one account per line. Additions and edits are saved automatically.',
+    '在输入框粘贴账号后，点击“提交添加”才会保存。清空或修改输入不会影响已保存的账号。',
+    'Paste accounts below, then submit to save. Clearing or editing this input never changes saved accounts.',
   ],
 } as const;
 export type Label = keyof typeof strings;

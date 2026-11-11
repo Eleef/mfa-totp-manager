@@ -10,6 +10,7 @@ import {
   nameEntry,
   readBackup,
   reconcilePasswords,
+  submitEntries,
   type Passwords,
   type EntryBackup,
 } from '../lib/entry-manager';
@@ -20,6 +21,7 @@ type VaultState = 'off' | 'locked' | 'open';
 interface Handlers {
   read(): string;
   write(text: string): void;
+  draftChanged(): void;
   vaultState(): VaultState;
 }
 export function startEntryManager(handlers: Handlers) {
@@ -27,6 +29,10 @@ export function startEntryManager(handlers: Handlers) {
   const host = requireElement(document, '#strips');
   const zone = requireElement(document, '#zone-input');
   const clear = requireElement<HTMLButtonElement>(document, '#key-clear');
+  const submit = button('submit', submitDraft);
+  submit.id = 'manager-submit';
+  submit.classList.add('key--primary');
+  clear.before(submit);
   const state = requireElement(document, '#state-text');
   const footer = requireElement(document, '.colophon__note');
   footer.removeAttribute('data-i18n');
@@ -172,9 +178,19 @@ export function startEntryManager(handlers: Handlers) {
     add.disabled = vaultState === 'locked';
     importButton.disabled = vaultState === 'locked';
     exportButton.disabled = vaultState === 'locked';
-    toolbar.append(add, importButton, exportButton);
+    const clearAll = button('clear', requestClear, true);
+    clearAll.id = 'manager-clear-all';
+    clearAll.disabled = vaultState === 'locked' || !handlers.read().trim();
+    toolbar.append(add, importButton, exportButton, clearAll);
     clear.removeAttribute('data-i18n');
-    clear.textContent = word('clear');
+    clear.textContent = word('clearDraft');
+    submit.textContent = word('submit');
+    submit.disabled = vaultState === 'locked' || !input.value.trim();
+    const legend = document.querySelector('label[for="secrets"]');
+    if (legend) {
+      legend.removeAttribute('data-i18n');
+      legend.textContent = word('draftLabel');
+    }
     state.textContent = storageProblem
       ? word(storageProblem)
       : word(vaultState === 'off' ? 'plain' : vaultState === 'open' ? 'encrypted' : 'locked');
@@ -224,6 +240,26 @@ export function startEntryManager(handlers: Handlers) {
       remove.setAttribute('aria-label', `${word('remove')} ${entryLabel(entry, index)}`);
       actions.append(remove);
       element.append(actions);
+    });
+  }
+  function submitDraft(): void {
+    if (handlers.vaultState() === 'locked') return;
+    try {
+      const original = handlers.read();
+      const data = submitEntries(original, passwords, input.value);
+      apply(data);
+      input.value = '';
+      handlers.draftChanged();
+      notify(word(data.text === original ? 'duplicateDraft' : 'submitted'));
+    } catch {
+      notify(word('invalidDraft'));
+    }
+  }
+  function requestClear(): void {
+    showDialog(word('clearTitle'), word('clearHelp'), 'confirm', () => {
+      snapshot();
+      apply(backup('', {}));
+      notify(word('removed'), true);
     });
   }
   function entryLabel(entry: ParsedEntry, index: number): string {
@@ -391,6 +427,7 @@ export function startEntryManager(handlers: Handlers) {
   function vaultChanged(): void {
     const nextState = handlers.vaultState();
     if (nextState === 'locked') {
+      input.value = '';
       undoData = null;
       passwords = {};
       dialog.close();
@@ -403,11 +440,6 @@ export function startEntryManager(handlers: Handlers) {
     paint();
   }
   onLocaleChange(() => paint());
-  // Synchronous typing persistence also covers immediate tab close before reparse's debounce.
-  input.addEventListener('input', sync);
-  input.addEventListener('paste', () => {
-    window.setTimeout(sync, 0);
-  });
   window.addEventListener('pagehide', persist);
   if (handlers.vaultState() === 'off') {
     let saved: string | null = null;
@@ -433,14 +465,8 @@ export function startEntryManager(handlers: Handlers) {
   paint();
   return {
     sync,
+    draftChanged: paint,
     vaultChanged,
-    requestClear(): void {
-      showDialog(word('clearTitle'), word('clearHelp'), 'confirm', () => {
-        snapshot();
-        apply(backup('', {}));
-        notify(word('removed'), true);
-      });
-    },
     serializeForVault(): string {
       return handlers.read().trim() ? JSON.stringify(backup(handlers.read(), passwords)) : '';
     },

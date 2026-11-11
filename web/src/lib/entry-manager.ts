@@ -37,6 +37,22 @@ export function readBackup(raw: string): EntryBackup {
   return backup(value.text, passwords);
 }
 
+/** Validate the entire draft before appending; never replace saved accounts. */
+export function submitEntries(text: string, passwords: Passwords, draft: string): EntryBackup {
+  const entries = parseEntries(draft);
+  if (entries.length === 0 || entries.some((entry) => entry.kind === 'error')) {
+    throw new Error('Invalid account draft');
+  }
+  const sources = new Set(parseEntries(text).map((entry) => entry.source));
+  const additions: string[] = [];
+  for (const entry of entries) {
+    if (sources.has(entry.source)) continue;
+    sources.add(entry.source);
+    additions.push(entry.source);
+  }
+  return backup([text.trimEnd(), ...additions].filter(Boolean).join('\n'), passwords);
+}
+
 function identity(entry: ParsedEntry): string {
   if (entry.kind === 'error') return entry.source;
   const account = entry.account;
