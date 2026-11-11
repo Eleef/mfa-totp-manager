@@ -1,0 +1,135 @@
+/**
+ * Verbindet die Bausteine: aus einem mehrzeiligen Textfeld werden fertige
+ * Konten (oder verständliche Fehlermeldungen).
+ *
+ * Erlaubte Schreibweisen pro Zeile:
+ *
+ *   JBSWY3DPEHPK3PXP                       rohes Base32-Secret
+ *   jbsw y3dp ehpk 3pxp                    dito, mit Leerzeichen und klein
+ *   GitHub: JBSWY3DPEHPK3PXP               Secret mit selbst vergebenem Namen
+ *   otpauth://totp/GitHub:me?secret=…      vollständige URI aus dem QR-Code
+ *   # eigene Notiz                         Kommentar, wird übersprungen
+ *
+ * Die Variante `Name: SECRET` ist eine bewusste Zutat dieser App (kein Standard).
+ * Sie kostet fünf Zeilen Code und macht eine Liste mit mehreren Konten überhaupt
+ * erst benutzbar — ohne sie wären alle Karten namenlos. Verwechslungsgefahr gibt
+ * es keine: Ein Doppelpunkt kommt in Base32 nie vor.
+ */
+
+import { decodeBase32, Base32Error } from './base32';
+import { isOtpauthUri, parseOtpauthUri, OtpauthUriError } from './otpauth-uri';
+import { OtpError, type HashAlgorithm } from './hotp';
+import type { Bytes } from './bytes';
+import { DEFAULT_ALGORITHM, DEFAULT_DIGITS, DEFAULT_PERIOD } from './totp';
+
+/** Ein einsatzbereites Konto: alles decodiert, alle Voreinstellungen aufgelöst. */
+export interface Account {
+  readonly issuer: string | undefined;
+  readonly accountName: string | undefined;
+  readonly secret: Bytes;
+  readonly algorithm: HashAlgorithm;
+  readonly digits: number;
+  readonly period: number;
+}
+
+/**
+ * Das Ergebnis einer Zeile. Ein Fehler ist hier ein ganz normaler Rückgabewert
+ * und keine Ausnahme: Eine kaputte Zeile soll eine Fehlerkarte erzeugen und die
+ * anderen Zeilen in Ruhe lassen.
+ */
+export type ParsedEntry =
+  | {
+      readonly kind: 'account';
+      readonly key: string;
+      readonly source: string;
+      readonly account: Account;
+    }
+  | {
+      readonly kind: 'error';
+      readonly key: string;
+      readonly source: string;
+      readonly message: string;
+    };
+
+/**
+ * Zerlegt den gesamten Inhalt des Textfelds.
+ * Leerzeilen und `#`-Kommentare fallen heraus.
+ */
+export function parseEntries(text: string): ParsedEntry[] {
+  const entries: ParsedEntry[] = [];
+
+  // Der Schlüssel identifiziert eine Karte über Neu-Auswertungen hinweg, damit
+  // die Oberfläche beim Tippen nur wirklich geänderte Karten neu aufbaut. Er
+  // besteht aus dem Zeileninhalt plus einem Zähler für Duplikate — bewusst NICHT
+  // aus der Zeilennummer: Sonst würde eine oben eingefügte Zeile alle Karten
+  // darunter ungültig machen, obwohl sich an ihnen nichts geändert hat.
+  const occurrences = new Map<string, number>();
+
+  for (const line of text.split(/\r?\n/)) {
+    const source = line.trim();
+    if (source === '' || source.startsWith('#')) {
+      continue;
+    }
+    const seen = occurrences.get(source) ?? 0;
+    occurrences.set(source, seen + 1);
+    entries.push(parseLine(source, seen === 0 ? source : `${source} #${seen + 1}`));
+  }
+
+  return entries;
+}
+
+/** Zerlegt eine einzelne, bereits getrimmte Zeile. */
+export function parseLine(source: string, key: string = source): ParsedEntry {
+  try {
+    const account = isOtpauthUri(source) ? accountFromUri(source) : accountFromSecret(source);
+    return { kind: 'account', key, source, account };
+  } catch (error) {
+    return { kind: 'error', key, source, message: describeError(error) };
+  }
+}
+
+function accountFromUri(source: string): Account {
+  const uri = parseOtpauthUri(source);
+  return {
+    issuer: uri.issuer,
+    accountName: uri.accountName,
+    secret: decodeBase32(uri.secret),
+    algorithm: uri.algorithm,
+    digits: uri.digits,
+    period: uri.period,
+  };
+}
+
+function accountFromSecret(source: string): Account {
+  // Am LETZTEN Doppelpunkt trennen: Ein Label darf dann selbst einen enthalten
+  // ("Arbeit: GitHub: SECRET"), das Secret niemals.
+  const separator = source.lastIndexOf(':');
+  const label = separator === -1 ? undefined : source.slice(0, separator).trim();
+  const secretText = separator === -1 ? source : source.slice(separator + 1).trim();
+
+  return {
+    issuer: label || undefined,
+    accountName: undefined,
+    secret: decodeBase32(secretText),
+    algorithm: DEFAULT_ALGORITHM,
+    digits: DEFAULT_DIGITS,
+    period: DEFAULT_PERIOD,
+  };
+}
+
+/**
+ * Macht aus einem geworfenen Fehler einen Satz für die Oberfläche.
+ * Unsere eigenen Fehlertypen sind schon auf Deutsch und für Menschen gedacht;
+ * alles andere bekommt einen neutralen Ersatztext, damit keine internen
+ * Meldungen durchsickern.
+ */
+function describeError(error: unknown): string {
+  if (
+    error instanceof Base32Error ||
+    error instanceof OtpauthUriError ||
+    error instanceof OtpError
+  ) {
+    return error.message;
+  }
+  return 'Diese Zeile konnte nicht gelesen werden.';
+}

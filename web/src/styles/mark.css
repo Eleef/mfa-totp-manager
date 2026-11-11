@@ -1,0 +1,209 @@
+/* =============================================================================
+   Marke und Zifferblatt
+
+   Das Markensystem aus branding/ hat drei Zeichen mit einer gemeinsamen
+   Formsprache. Zwei davon leben hier im CSS:
+
+     C — Wortmarke   .wordmark   im Kopf, beide O als Zifferblätter
+     A — Skala       .dialface   das Zifferblatt neben jedem Code
+
+   Das dritte (B — C-Werk) ist Icon und Favicon und wird in scripts/icons.mjs
+   gezeichnet.
+
+   Die drei teilen dieselbe Logik: stumpfe Strichenden, präzise Geometrie, genau
+   ein Signalpunkt. Nichts davon ist weichgezeichnet.
+   ========================================================================== */
+
+/* ── C — Wortmarke ────────────────────────────────────────────────────────── */
+
+/* Die Marke steht in jeder Sprache lateinisch und in der Markenschrift — auch
+   auf Arabisch, Japanisch oder Griechisch. Ein Logo wird nicht übersetzt.
+   `--font-brand` kippt deshalb nicht mit dem Schriftsystem (styles/scripts.css),
+   und `dir="ltr"` steht am Element in index.html. */
+.wordmark {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: var(--t-mark);
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ── Warum das hier kein inline-flex mehr ist ──────────────────────────────
+   Weil ein inline-flex mit `align-items: center` keine echte Schrift-Grundlinie
+   hat. Der Browser setzt für so einen Kasten eine ERSATZ-Grundlinie an seine
+   Unterkante — und die liegt nicht dort, wo die Buchstaben stehen.
+
+   Der Kopf richtet seine drei Angaben über `align-items: baseline` aus (Wortmarke,
+   Markenzeile, Zustand). Mit der Ersatz-Grundlinie hat das Raster die Wortmarke
+   also an einer Linie ausgerichtet, die es im Zeichen nicht gibt: Gemessen lagen
+   die drei Grundlinien 7 und 1 px auseinander, obwohl das CSS sie auf eine legte.
+
+   Als gewöhnlicher Inline-Text hat die Wortmarke eine echte Grundlinie, und die
+   Ringe brauchen den Flexkasten nicht: Ein `inline-block` sitzt von sich aus mit
+   der Unterkante auf der Grundlinie, und bei 0,7 em Höhe reicht er damit genau
+   bis zur Versalhöhe — das ist die Stellung, die die Vorlage vorgibt („praktisch
+   versalhoch"). Der Flexkasten hat dieselbe Stellung mühsam nachgebaut und dabei
+   die Grundlinie verloren. */
+.wordmark__word {
+  letter-spacing: var(--track-mark);
+  text-transform: uppercase;
+}
+
+/* Die O sind Ringe, keine Buchstaben.
+   Maße aus der Wortmarke: Ring-Außendurchmesser 59,86 bei einer Versalhöhe von
+   rund 60 Einheiten — also praktisch versalhoch. Strichstärke 7,84, das sind
+   0,131 des Durchmessers. Beides hier als em-Werte, damit die Marke mit der
+   Schriftgröße mitwächst statt in einer festen Pixelgröße einzufrieren. */
+.wordmark__o {
+  position: relative;
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border: 0.092em solid currentcolor;
+  border-radius: 50%;
+  /* Rechts kommt die Sperrung der Schrift dazu, links muss sie nachgebildet
+     werden — sonst klebt das O am vorigen Buchstaben.
+
+     Bewusst physisch und nicht `margin-inline-start`: Die Wortmarke ist per
+     `dir="ltr"` festgenagelt, „links" ist hier also keine Leserichtung, sondern
+     eine Stelle in einem Zeichen. */
+  margin-left: var(--track-mark);
+}
+
+/* Der Signal-Index auf dem ersten O, auf 12 Uhr. Er läuft von außerhalb des
+   Rings bis in ihn hinein — genau wie in der Vorlage, wo er bei Radius 34,93
+   beginnt und bei 17,09 endet. Der einzige farbige Punkt der Marke.
+
+   `left`/`top` sind hier die letzten physischen Angaben im ganzen Stylesheet
+   und bleiben es: Sie zentrieren einen Strich in einem Zeichen (zusammen mit
+   `translateX(-50%)`), sie richten nichts an einer Leserichtung aus. Die
+   Wortmarke ist ohnehin per `dir="ltr"` festgenagelt. */
+.wordmark__o--index::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -0.1em;
+  width: 0.092em;
+  height: 0.3em;
+  background: var(--signal);
+  transform: translateX(-50%);
+}
+
+/* ── A — Skala: das Zifferblatt ───────────────────────────────────────────── */
+
+/* Gezeichnet wird in ui/gauge.ts, hier stehen nur Farbe und Bewegung.
+   `stroke-linecap` bleibt bei der Vorgabe `butt`: stumpfe Enden, keine
+   abgerundeten Striche. Das ist keine Kleinigkeit — ein runder Abschluss würde
+   aus der Gravur eine Zeichnung machen. */
+/* `direction: ltr` ist hier kein Versehen und keine Kopie: Das Zifferblatt wird
+   in einer rechtsläufigen Oberfläche NICHT gespiegelt. Ein Messinstrument ist
+   richtungsneutral — Uhren laufen auch in Kairo und Tel Aviv im Uhrzeigersinn.
+   Ohne diese Zeile würde der SVG-Inhalt zwar nicht kippen, aber jede künftige
+   Positionierung darin wäre der Leserichtung ausgeliefert; so ist die Geometrie
+   ein für alle Mal festgenagelt. */
+.dialface {
+  display: block;
+  direction: ltr;
+  width: var(--dial-size);
+  height: var(--dial-size);
+  flex: none;
+  overflow: visible;
+}
+
+.dialface__tick {
+  stroke: var(--ink-3);
+}
+
+.dialface__hub {
+  fill: var(--ink);
+  transition: fill var(--dur-calm) var(--ease-spring);
+}
+
+/* ── Die Kopier-Quittung ───────────────────────────────────────────────────
+   Beim Kopieren springt die Nabe für die Dauer der Rückmeldung auf Signal.
+   Sie ist der einzige Punkt des Zifferblatts, der sonst immer Tinte trägt —
+   im Emblem ist genau ein Punkt farbig, und hier ist es für anderthalb
+   Sekunden dieser.
+
+   Bewusst ein ZUSTAND und keine Animation. Der Unterschied ist nicht
+   akademisch: `prefers-reduced-motion` schaltet in diesem Projekt alle
+   Animationen global auf 0,001 ms. Eine Quittung, die als Keyframe gebaut
+   wäre, verschwände damit für genau die Leute, die ohnehin weniger visuelle
+   Signale bekommen. Als Zustand bleibt sie stehen; nur der weiche Übergang
+   dorthin entfällt. */
+.strip--copied .dialface__hub {
+  fill: var(--signal-text);
+}
+
+/* Der Zeiger. Eine Umdrehung pro Periode, angetrieben von `--progress`, das die
+   Uhr pro Frame setzt. Gedreht wird die Gruppe, nicht der Strich — die
+   Geometrie bleibt dadurch exakt die der Vorlage. */
+.dialface__hand {
+  transform: rotate(calc(var(--progress, 0) * 360deg));
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+}
+
+/* Der tiefe Signal-Ton, nicht der Markenwert — die V8-Grenze „grobe Geometrie
+   gegen feine" gilt auf den V9-Flächen erst recht: Der Zeiger ist 3 px stark,
+   und #f05a28 hält auf der berührten Fläche hell nur 2,89:1. Gemessen, nicht
+   geschätzt — dieselbe Rechnung wie in tokens.css. */
+.dialface__handMark {
+  stroke: var(--signal-text);
+}
+
+/* Die letzten Sekunden: Der Zeiger allein genügt nicht mehr, jetzt zieht auch
+   die Teilung an. Das ist der einzige Moment, in dem das Gerät von sich aus
+   Signalfarbe zeigt. Auch hier der tiefe Ton: Eine Skalenmarke ist feine
+   Geometrie. */
+.strip--expiring .dialface__tick {
+  stroke: var(--signal-text);
+}
+
+/* ── Leerzustand: das Emblem in Ruhe ──────────────────────────────────────
+   Bis V6 stand das Emblem klein und links neben einem Satz, in einem sonst
+   leeren Codes-Panel. Es war Deko am Rand.
+
+   Im Leerzustand ist es aber das Einzige, was von der Marke zu sehen ist,
+   bevor irgendetwas passiert — also steht es groß und in der Mitte, und der
+   Satz darunter. Zusammen sind sie die Überschrift über dem Eingabefeld, das
+   gleich folgt.
+
+   Es steht still: Es gibt noch nichts zu messen. Der Zeiger wird erst gezeichnet,
+   wenn ein Konto da ist (ui/gauge.ts wird hier mit 30 Marken und ohne Zeiger
+   aufgerufen). */
+.vacant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-stack);
+  padding-block-end: var(--sp-6);
+  text-align: center;
+}
+
+.vacant[hidden] {
+  display: none;
+}
+
+.vacant__emblem {
+  /* Deutlich größer als am Kanalzug — hier ist es Marke, nicht Anzeige. Über
+     `--dial-size` und nicht als fester Wert: Wächst das Instrument, wächst
+     das Zeichen mit. */
+  width: calc(var(--dial-size) * 2.2);
+  height: calc(var(--dial-size) * 2.2);
+  opacity: 0.5;
+}
+
+.vacant__text {
+  font-size: var(--t-body);
+  color: var(--ink-2);
+  max-width: 46ch;
+  text-wrap: pretty;
+}
+
+@media (max-width: 34rem) {
+  .vacant__emblem {
+    width: calc(var(--dial-size) * 1.6);
+    height: calc(var(--dial-size) * 1.6);
+  }
+}

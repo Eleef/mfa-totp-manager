@@ -1,0 +1,753 @@
+<!doctype html>
+<!--
+  lang und dir stehen hier auf Englisch/ltr, weil der ausgelieferte Text
+  englisch ist (en ist Basissprache). src/i18n/apply.ts setzt beide beim Start
+  auf die erkannte Sprache um — und damit auch data-script, das den
+  Schrift-Stack auswählt.
+-->
+<html lang="en" dir="ltr" data-script="latin">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      name="description"
+      content="Clockwork — TOTP authenticator. Generates two-factor codes entirely in the browser, without any network requests."
+    />
+    <!--
+      Die Farbe der Browserleiste ist der SEITENGRUND (--ground): Seit V9 gibt
+      es keinen Gehäuseton mehr — `body` trägt in jedem Layout --ground, und
+      die Leiste grenzt an genau diese Fläche.
+
+      HTML kann kein var() lesen; diese beiden Werte sind die einzige Stelle
+      im Projekt, an der eine Palettenfarbe von Hand kopiert steht. Deshalb
+      prüft scripts/check-tokens.mjs sie bei jedem Lauf gegen tokens.css —
+      kopierte Werte wandern nicht von selbst mit, das haben drei Versionen
+      veraltete theme-color-Tags bewiesen.
+    -->
+    <meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#060607" media="(prefers-color-scheme: dark)" />
+
+    <!--
+      Angaben für geteilte Links. Sie bleiben englisch, auch wenn die Oberfläche
+      umschaltet: Was ein Vorschau-Dienst zu sehen bekommt, ist das ausgelieferte
+      HTML, und das ist die Basissprache.
+
+      Ein <meta>-Tag lädt nichts — die Adressen hier sind Angaben über die Seite,
+      keine Anfragen. Die Zusage „keine fremde Netzwerkanfrage" bleibt davon
+      unberührt, auch in der Single-File-Datei.
+    -->
+    <link rel="canonical" href="%SITE_URL%/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Clockwork" />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:title" content="Clockwork — TOTP Authenticator" />
+    <meta
+      property="og:description"
+      content="Two-factor codes generated entirely in your browser. No network requests, nothing stored by default, RFC 4226/6238 implemented from scratch."
+    />
+    <meta property="og:image" content="%SITE_URL%/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="The Clockwork emblem: a dial of 30 marks with one orange mark at twelve o'clock, on a dark ground."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Clockwork — TOTP Authenticator" />
+    <meta
+      name="twitter:description"
+      content="Two-factor codes generated entirely in your browser. No network requests, nothing stored by default."
+    />
+    <meta name="twitter:image" content="%SITE_URL%/og-image.png" />
+    <!--
+      Favicon als Inline-SVG: das C-Werk aus branding/clockwork-logo-b-cwerk.svg,
+      auf das Nötigste reduziert. Ohne diese Zeile fragt der Browser von sich aus
+      /favicon.ico an — das wäre eine Netzwerkanfrage, und genau die soll es hier
+      nicht geben.
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20fill='%23131210'/%3E%3Cpath%20d='M46%2019a20%2020%200%201%200%200%2026'%20fill='none'%20stroke='%23f5f3ef'%20stroke-width='9'/%3E%3Ccircle%20cx='45'%20cy='32'%20r='5.5'%20fill='%23f05a28'/%3E%3C/svg%3E"
+    />
+    <title>Clockwork — TOTP Authenticator</title>
+  </head>
+
+  <body>
+    <!-- `hidden` beim Ausliefern, weil die Seite im Leerzustand startet und die
+         Codes-Zone dort nicht existiert. ui/app.ts blendet ihn ein, sobald es
+         etwas zum Hinspringen gibt. -->
+    <a class="skip" href="#zone-codes" hidden data-i18n="skip.toCodes">Skip to the codes</a>
+
+    <!--
+      Der Leerzustand steht schon im ausgelieferten HTML, nicht erst, wenn das
+      Skript läuft.
+
+      Der Browser malt einmal, BEVOR ein 620-kB-Bündel ausgewertet ist. Stand
+      hier kein Zustand, zeigte dieser erste Anstrich die volle Shell — Rail,
+      Tresor, Codes-Panel —, und das Skript räumte sie eine Zehntelsekunde
+      später wieder ab. Gemessen als Layout-Shift von 0,175, also der einzige
+      Grund, warum Lighthouse auf 92 statt 95 stand.
+
+      Und es ist keine Behauptung: Beim Laden ist das Feld IMMER leer. Es gibt
+      keinen Speicher ohne Tresor, und mit Tresor ist der Inhalt verschlüsselt —
+      dann ist das Feld erst recht leer.
+    -->
+    <div class="device" data-stage="vacant">
+      <!-- ══ Kopf ══════════════════════════════════════════════════════ -->
+      <header class="masthead">
+        <!--
+          Wortmarke nach branding/clockwork-logo-c-wortmarke.svg, aber in der
+          UI-Schrift statt im Platzhalter-Schnitt: Beide O sind Zifferblätter,
+          das erste trägt den Signal-Index auf 12 Uhr. Die Ringe sind echte
+          Elemente, kein Bild — sie skalieren mit der Schriftgröße und tragen
+          im dunklen Modus dieselbe Tinte wie die Buchstaben.
+
+          Die Marke bleibt in jeder Sprache lateinisch gesetzt (siehe
+          styles/scripts.css): Ein Logo wird nicht übersetzt.
+        -->
+        <h1 class="wordmark" translate="no" dir="ltr">
+          <span class="sr-only">Clockwork</span>
+          <span class="wordmark__word" aria-hidden="true"
+            >CL<i class="wordmark__o wordmark__o--index"></i>CKW<i class="wordmark__o"></i>RK</span
+          >
+        </h1>
+        <p class="masthead__spec" data-i18n="brand.tagline">TOTP Authenticator · RFC 6238</p>
+        <p class="masthead__state">
+          <span class="lamp" aria-hidden="true"></span>
+          <span id="state-text">Offline · nothing stored</span>
+        </p>
+      </header>
+
+      <main>
+        <!-- ══ Onboarding-Bühne: nur im Leerzustand ═════════════════════
+             Emblem und Satz stehen VOR der Bedienseite, weil im Leerzustand
+             genau diese Reihenfolge gelesen wird: Zeichen, Satz, Feld, Knöpfe.
+             Im Arbeitszustand ist dieser Block weg, und die Reihenfolge stimmt
+             weiter — Eingabe, Tresor, Codes.
+
+             Bis V6 saß er IM Codes-Panel und war damit ein Platzhalter in einer
+             leeren Kiste. Ein Leerzustand ist aber kein leerer Behälter,
+             sondern ein eigener Zustand des Geräts. -->
+        <div class="vacant" id="vacant">
+          <svg
+            class="dialface vacant__emblem"
+            id="vacant-dial"
+            aria-hidden="true"
+            focusable="false"
+          ></svg>
+          <p class="vacant__text" data-i18n="vacant.text">
+            Put in a secret, an otpauth link or a QR image — nothing ever leaves this browser.
+          </p>
+        </div>
+
+        <!-- ══ Zone: Codes — die Bühne ═════════════════════════════════
+             Seit V10 steht sie VOR der Bedienseite im Dokument. Der Grund ist
+             das Handy: Unter 64 rem gilt die Flussreihenfolge, und dort soll
+             beim Öffnen der Code ohne Scrollen dastehen — ablesen ist der
+             häufige Fall, einstellen der seltene. Dieselbe Reihenfolge gilt
+             damit auch für Tastatur und Screenreader: Was zuerst im Bild ist,
+             ist auch zuerst im Fokuslauf.
+
+             Auf dem Schreibtisch ändert sich NICHTS: Die Shell setzt Rail und
+             Bühne über explizite Rasterspalten an ihre Plätze (style.css),
+             und ein Raster ist von der Dokumentreihenfolge unabhängig. -->
+        <section class="zone" id="zone-codes" aria-labelledby="zone-codes-label">
+          <h2 class="zone__label" id="zone-codes-label" data-i18n="zone.codes">Codes</h2>
+          <div class="zone__body">
+            <!--
+              Die Filterzeile. Sie erscheint erst ab acht Konten (ui/app.ts) —
+              darunter ist sie ein Bedienelement für ein Problem, das es nicht
+              gibt, und nimmt der Bühne eine Zeile weg.
+
+              `type="search"` und nicht `text`: Der Browser gibt dem Feld damit
+              seine Löschtaste und meldet es dem Screenreader als Suchfeld.
+
+              Als EINZIGES darf diese Zeile kleben — die Bühne selbst nicht. Wer
+              in einer langen Liste sucht, braucht das Feld im Blick; wer eine
+              Liste liest, will sie nicht unter einem Riegel hervorholen.
+            -->
+            <div class="stage__filter" id="stage-filter" hidden>
+              <label class="sr-only" for="strip-filter" data-i18n="filter.label"
+                >Filter accounts</label
+              >
+              <input
+                type="search"
+                id="strip-filter"
+                class="field stage__field"
+                autocomplete="off"
+                spellcheck="false"
+                data-i18n-attr="placeholder=filter.placeholder"
+                placeholder="Filter by name"
+              />
+            </div>
+
+            <div class="strips" id="strips"></div>
+
+            <!-- Kein Treffer im Filter. Ein eigener Absatz und nicht der
+                 Leerzustand: „nichts eingegeben" und „nichts gefunden" sind
+                 zwei verschiedene Auskünfte. -->
+            <p class="stage__void" id="filter-void" role="status" aria-live="polite" hidden></p>
+          </div>
+        </section>
+
+        <!--
+          Die Bedienseite als EIN Bereich. Bis V6 standen Eingabe und Tresor
+          als zwei Geschwister direkt im Raster, und genau daran ist der
+          Zweispalter gescheitert: Zwei getrennte Rasterelemente lassen sich
+          nicht gemeinsam scrollen und nicht gemeinsam verschieben. Was
+          zusammen bedient wird, muss auch zusammen ein Kasten sein.
+        -->
+        <div class="rail">
+          <!-- ══ Zone: Eingabe ═══════════════════════════════════════════ -->
+          <section class="zone" id="zone-input" aria-labelledby="zone-input-label">
+            <h2 class="zone__label" id="zone-input-label" data-i18n="zone.input">Input</h2>
+            <div class="zone__body">
+              <!--
+                Die Zusammenfassungszeile fürs Handy (V10): „Eingabe · 1 Konto".
+                Nur unter 64 rem und nur im Arbeitszustand sichtbar — auf dem
+                Schreibtisch bleibt das Panel offen, und im Leerzustand IST das
+                Feld die Bühne.
+
+                Ein <button> mit aria-expanded und kein <details>: Ob der Editor
+                offen ist, entscheidet beim Zustandswechsel ui/app.ts (er bleibt
+                offen, solange der Fokus darin liegt — wer gerade tippt, dem
+                klappt nichts unter den Fingern zu). Ein details, dessen
+                open-Attribut das Skript ständig übersteuert, wäre eine zweite
+                Wahrheit über denselben Zustand.
+
+                Der Zähler trägt denselben Text wie der Chip unter dem Feld
+                (summarise in ui/app.ts) — eine Zahl, eine Quelle. Der
+                Trennpunkt dazwischen ist gesetzt, nicht getippt (style.css),
+                wie im Fuß und in der Metazeile.
+              -->
+              <button
+                type="button"
+                class="zone__fold"
+                id="input-fold"
+                aria-expanded="false"
+                aria-controls="input-editor"
+              >
+                <span data-i18n="zone.input">Input</span>
+                <span class="zone__foldCount" id="input-fold-count"></span>
+              </button>
+              <!--
+                Zwei Hüllen um den Editor, beide auf dem Schreibtisch
+                durchsichtig (display: contents): Die äußere ist die Schublade,
+                die mobil über grid-template-rows 0fr/1fr auf- und zufährt —
+                der einzige Weg, eine Höhe „auto" rein in CSS zu animieren —,
+                die innere trägt Beschnitt und Sichtbarkeit. Siehe style.css,
+                Abschnitt „Mobil-Struktur".
+              -->
+              <div class="zone__drawer">
+                <div class="zone__editor" id="input-editor">
+                  <div class="slot">
+                    <label class="slot__legend" for="secrets" data-i18n="input.legend"
+                      >One entry per line</label
+                    >
+                    <!--
+                dir="ltr" ist hier keine Kosmetik: Base32-Secrets und
+                otpauth-URIs sind lateinische Zeichenketten. In einer
+                RTL-Oberfläche würde die Bidi-Regel sie sonst am rechten Rand
+                ausrichten und Satzzeichen umsortieren — man tippt dann etwas
+                anderes ein, als man sieht.
+              -->
+                    <!-- Der Platzhalter beginnt seit V10 mit dem „z. B."-Kürzel und
+                     ist damit übersetzbar geworden (data-i18n-attr): Drei
+                     plausible Zeilen ohne Markierung sahen aus wie echte
+                     Einträge. Der Text hier ist die englische Fassung für den
+                     ersten Anstrich. -->
+                    <textarea
+                      id="secrets"
+                      class="field slot__field"
+                      translate="no"
+                      dir="ltr"
+                      rows="4"
+                      spellcheck="false"
+                      autocomplete="off"
+                      autocapitalize="off"
+                      autocorrect="off"
+                      data-i18n-attr="placeholder=input.placeholder"
+                      placeholder="e.g. JBSWY3DPEHPK3PXP&#10;GitHub: jbsw y3dp ehpk 3pxp&#10;otpauth://totp/ACME:kevin@example.com?secret=JBSWY3DPEHPK3PXP"
+                    ></textarea>
+                    <!-- Die Bilanzzeile ist seit V8 ein Chip: „8 Konten" ist eine
+                     Angabe zum Feld darüber, kein Fließtext. Die Hülle
+                     reserviert die Höhe, damit die Tastenzeile beim ersten
+                     Eintrag nicht nach unten rutscht. -->
+                    <p class="slot__meter"><span class="chip" id="entry-count"></span></p>
+                  </div>
+
+                  <!--
+                Die Tastenzeile hat seit V7 eine Rangordnung, keine Reihe.
+
+                Links, abgesetzt und als leiser Textknopf: „Leeren". Es ist die
+                einzige zerstörerische Handlung im Panel, und eine Pille neben
+                zwei anderen Pillen behauptet Gleichrang. Rechts die Gruppe, die
+                zusammengehört, weil sie dasselbe tut — ein Bild hereinholen:
+                Testschlüssel, QR aus Bild, Kamera.
+
+                Sichtbarkeit steuert ui/app.ts, nicht CSS: „Leeren" erscheint,
+                sobald etwas im Feld steht, der Testschlüssel verschwindet dann.
+                Beides hängt am tatsächlichen Feldinhalt und nicht am Zustand
+                der Bühne — eine Zeile, die nur einen Kommentar enthält, ergibt
+                keinen Eintrag, ist aber sehr wohl etwas zum Leeren.
+              -->
+                  <div class="keys">
+                    <!-- `hidden` von Anfang an: Beim Laden ist das Feld leer, es
+                     gibt also nichts zu leeren. Ab hier führt ui/app.ts beide
+                     Tasten. -->
+                    <button
+                      type="button"
+                      class="key key--flat"
+                      id="key-clear"
+                      hidden
+                      data-i18n="key.clear"
+                    >
+                      Clear
+                    </button>
+                    <span class="keys__gap" aria-hidden="true"></span>
+                    <!--
+                  Der Testschlüssel stand bis V6 im Leerzustands-Block. Er steht
+                  jetzt hier — an der Stelle, an der die anderen beiden Wege ins
+                  Feld auch stehen —, und `hidden` hält ihn vom Arbeitszustand
+                  fern. Die Zusage aus V4 bleibt damit wörtlich erfüllt: Es gibt
+                  keinen Zustand, in dem dieser Knopf echtes Schlüsselmaterial
+                  überschreiben könnte. Der Handler prüft zusätzlich auf ein
+                  leeres Feld.
+                -->
+                    <button type="button" class="key key--primary key--lg" id="key-demo">
+                      <svg
+                        class="key__icon"
+                        viewBox="0 0 16 16"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path d="M8 3.25v9.5M3.25 8h9.5" />
+                      </svg>
+                      <span data-i18n="vacant.demo">Insert test key</span>
+                    </button>
+                    <!--
+                Die Bedien-Icons sind seit V5 in der Handschrift von SF Symbols
+                gezeichnet: runde Ecken, weiche Verbindungen, 1,5 px Strich
+                (styles/style.css, .key__icon). Das gilt ausdrücklich NUR für
+                Zeichen, die man antippt — Skala, Zeiger und Nabe behalten
+                stumpfe Enden und exakte Geometrie.
+
+                Aus dem Ordner ist ein Bildrahmen geworden. Der Knopf öffnet
+                keinen Ordner, er nimmt ein Bild entgegen; ein Ordnersymbol
+                versprach die falsche Handlung.
+              -->
+                    <button type="button" class="key key--default" id="key-file">
+                      <svg
+                        class="key__icon"
+                        viewBox="0 0 16 16"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <rect x="2" y="3" width="12" height="10" rx="2.75" />
+                        <circle cx="5.6" cy="6.4" r="1" />
+                        <path d="M2.6 11.4 6 8.4l2.3 2 2.3-2.4 2.8 3" />
+                      </svg>
+                      <!-- Eigener span: data-i18n setzt textContent, das würde sonst
+                     das Icon mit wegwischen. -->
+                      <span data-i18n="key.qrImage">QR from image</span>
+                    </button>
+                    <button type="button" class="key key--default" id="key-camera">
+                      <svg
+                        class="key__icon"
+                        viewBox="0 0 16 16"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <rect x="1.75" y="4.4" width="12.5" height="9.1" rx="2.75" />
+                        <path d="M5.5 4.4 6.4 2.5h3.2l.9 1.9" />
+                        <circle cx="8" cy="8.95" r="2.35" />
+                      </svg>
+                      <span data-i18n="key.camera">Camera</span>
+                    </button>
+                    <input
+                      type="file"
+                      id="file-input"
+                      accept="image/*"
+                      class="sr-only"
+                      tabindex="-1"
+                      aria-hidden="true"
+                    />
+                  </div>
+
+                  <!-- Kamerasucher. Die vier Eckwinkel sind kein Zierrat: Sie zeigen,
+                 wohin der QR-Code gehalten werden muss. -->
+                  <div class="viewfinder" id="viewfinder" hidden>
+                    <div class="viewfinder__frame">
+                      <video
+                        id="viewfinder-video"
+                        class="viewfinder__video"
+                        playsinline
+                        muted
+                      ></video>
+                      <span class="viewfinder__mark" data-corner="tl" aria-hidden="true"></span>
+                      <span class="viewfinder__mark" data-corner="tr" aria-hidden="true"></span>
+                      <span class="viewfinder__mark" data-corner="bl" aria-hidden="true"></span>
+                      <span class="viewfinder__mark" data-corner="br" aria-hidden="true"></span>
+                    </div>
+                    <div class="viewfinder__bar">
+                      <p class="viewfinder__hint" id="viewfinder-hint" data-i18n="viewfinder.hint">
+                        Hold the QR code inside the frame
+                      </p>
+                      <button
+                        type="button"
+                        class="key key--default"
+                        id="key-camera-stop"
+                        data-i18n="key.cameraStop"
+                      >
+                        Camera off
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="note" id="import-note" role="status" aria-live="polite"></p>
+
+                  <!--
+              Reichtexte: Der Satz ist EINE Übersetzung mit Platzhaltern, die
+              ausgezeichneten Stücke liegen als [data-slot] daneben. Beim
+              Anwenden werden sie an die Stelle ihres Platzhalters geschoben —
+              wohin, bestimmt die Übersetzung. Damit ist die Wortstellung frei.
+              Siehe src/i18n/apply.ts.
+            -->
+                  <!--
+                Bis V6 standen hier drei gleichrangige Hinweisabsätze. In einer
+                Rail von 368 px wurden daraus zwölf Zeilen Kleingedrucktes über
+                dem, worum es geht — und der erste Satz, der einzige, den man
+                wirklich braucht, ging darin unter.
+
+                Jetzt trägt eine Zeile die Antwort auf „was darf ich hier
+                hineinschreiben", und der Rest liegt hinter einem Aufklapper.
+                `<details>` und nicht ein eigener Knopf mit `aria-expanded`: Das
+                Element bringt Zustand, Tastaturbedienung und
+                Screenreader-Ansage mit, und es funktioniert ohne eine Zeile
+                JavaScript.
+              -->
+                  <p class="note note--lede" data-rich="input.help.formats">
+                    <code data-slot="nameSecret" translate="no" dir="ltr">Name: SECRET</code>
+                    <code data-slot="uri" translate="no" dir="ltr">otpauth://…</code>
+                    <code data-slot="hash" translate="no" dir="ltr">#</code>
+                  </p>
+                  <details class="reveal">
+                    <summary class="reveal__summary" data-i18n="input.help.more">
+                      All input formats
+                    </summary>
+                    <div class="reveal__body">
+                      <p class="note" data-rich="input.help.images">
+                        <span data-slot="paste" dir="ltr"
+                          ><kbd data-i18n="shortcut.modifier">Ctrl</kbd>+<kbd translate="no"
+                            >V</kbd
+                          ></span
+                        >
+                      </p>
+                      <p class="note" data-rich="input.help.migration">
+                        <code data-slot="migration" translate="no" dir="ltr"
+                          >otpauth-migration://</code
+                        >
+                      </p>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Zone: Tresor ════════════════════════════════════════════
+               `hidden` von Anfang an, aus demselben Grund wie beim
+               Leerzustand oben: Der übliche Fall ist ein leeres Feld, und dann
+               gehört der Tresor nicht ins Bild. Liegt ein GESPERRTER Tresor
+               vor, blendet ui/app.ts ihn ein — das ist der seltenere Fall und
+               kostet dann eben einen Sprung nach unten statt bei jedem
+               einzelnen Aufruf einen. -->
+          <section class="zone" id="zone-vault" aria-labelledby="zone-vault-label" hidden>
+            <h2 class="zone__label" id="zone-vault-label" data-i18n="zone.vault">Vault</h2>
+            <div class="zone__body">
+              <div class="vault" id="vault" data-state="off">
+                <!--
+                  Der Tresor ist seit V7 ein Aufklapper. In einer Rail von
+                  368 px ist er sonst der größte Block der Bedienseite — und das
+                  für eine Funktion, die man einmal einrichtet und danach nie
+                  wieder anfasst.
+
+                  Die Statuszeile ist die Zusammenfassung und damit IMMER
+                  sichtbar: Ob etwas gespeichert ist, muss man ablesen können,
+                  ohne etwas zu öffnen. Alles, womit man etwas TUT, liegt
+                  dahinter.
+
+                  Das `open`-Attribut setzt ui/vault-panel.ts, sobald ein
+                  Tresor gesperrt ist: Dann ist das Passphrasenfeld das
+                  Wichtigste auf der Seite und darf nicht hinter einem Klick
+                  liegen.
+                -->
+                <details class="vault__disclosure" id="vault-disclosure">
+                  <summary class="vault__state">
+                    <span class="vault__lamp" aria-hidden="true"></span>
+                    <span id="vault-state-text">Off — nothing is stored</span>
+                  </summary>
+
+                  <div class="vault__panel">
+                    <!--
+                Zwei Sätze, und der Rest liegt im Aufklapper darunter. Bis V7
+                standen hier vier Zeilen mit Verfahrensnamen und Iterationszahl —
+                über einem Passwortfeld, in einer Rail von 368 px. Wer den Tresor
+                einschaltet, muss zwei Dinge wissen: dass nichts gespeichert wird,
+                solange er es nicht will, und dass ohne die Passphrase nichts
+                davon zu gebrauchen ist. Welches KDF dabei mitläuft, ist für die
+                Entscheidung nicht nötig — nachlesen kann man es trotzdem, einen
+                Klick tiefer.
+
+                Der Text steht hier ausgeschrieben, obwohl vault-panel.ts ihn
+                setzt: Das Bündel wiegt rund 620 kB, der Browser malt also einmal,
+                BEVOR das Skript läuft. Ein leerer Absatz an dieser Stelle wächst
+                danach um Zeilen und schiebt die halbe Seite nach unten.
+              -->
+                    <!-- Erklärung und Einzelheiten in EINER Hülle: Beide gelten
+                         nur, solange der Tresor aus ist, und ein Zustand, der an
+                         zwei Stellen geschaltet wird, läuft irgendwann
+                         auseinander. -->
+                    <div class="vault__intro" id="vault-intro">
+                      <p class="note" id="vault-explain">
+                        By default Clockwork stores nothing. If you switch the vault on, the input
+                        here is encrypted with your passphrase — without it, the stored block is
+                        worthless.
+                      </p>
+
+                      <!--
+                Die Einzelheiten. Derselbe Aufklapper wie bei den
+                Eingabeformaten: `<details>` bringt Zustand, Tastaturbedienung
+                und Screenreader-Ansage mit und braucht keine Zeile JavaScript.
+
+                Die Iterationszahl steht darin, deshalb setzt vault-panel.ts
+                auch diesen Absatz — sie will lokalisiert gruppiert sein
+                (600,000 / 600.000 / 600 000).
+              -->
+                      <details class="reveal">
+                        <summary class="reveal__summary" data-i18n="vault.explain.more">
+                          All details
+                        </summary>
+                        <div class="reveal__body">
+                          <p class="note" id="vault-crypto">
+                            The key comes from your passphrase via PBKDF2-SHA-256 with 600,000
+                            iterations; AES-256-GCM does the encrypting. Only the sealed envelope is
+                            stored — never plaintext, never the passphrase, never the derived key.
+                          </p>
+                        </div>
+                      </details>
+                    </div>
+
+                    <form class="vault__form" id="vault-form">
+                      <label class="slot__legend" for="vault-pass" id="vault-pass-label"
+                        >Passphrase</label
+                      >
+                      <div class="vault__row">
+                        <input
+                          type="password"
+                          id="vault-pass"
+                          class="field vault__pass"
+                          translate="no"
+                          dir="ltr"
+                          autocomplete="current-password"
+                          spellcheck="false"
+                        />
+                        <!-- Die Haupthandlung des Panels, also primary in
+                             Signal-Orange. Die Höhe bleibt die mittlere: Der
+                             Knopf steht neben dem Passwortfeld, und zwei
+                             Bauteile in einer Zeile haben dieselbe Höhe, weil
+                             sie dieselbe HABEN. -->
+                        <button type="submit" class="key key--primary" id="vault-primary">
+                          Store encrypted
+                        </button>
+                      </div>
+                      <p class="vault__error" id="vault-error" role="alert"></p>
+                    </form>
+
+                    <div class="keys" id="vault-actions">
+                      <button
+                        type="button"
+                        class="key key--default"
+                        id="vault-lock"
+                        hidden
+                        data-i18n="vault.action.lock"
+                      >
+                        Lock
+                      </button>
+                      <button
+                        type="button"
+                        class="key key--default"
+                        id="vault-update"
+                        hidden
+                        data-i18n="vault.action.update"
+                      >
+                        Store again
+                      </button>
+                      <button type="button" class="key key--danger" id="vault-wipe" hidden>
+                        Delete everything
+                      </button>
+                    </div>
+
+                    <p class="vault__config">
+                      <label for="vault-timeout" data-i18n="vault.timeout.label"
+                        >Locks automatically after</label
+                      >
+                      <!-- Beschriftet werden die Einträge in vault-panel.ts über die
+                     Mehrzahlregeln. Der Text hier ist der Platzhalter für den
+                     ersten Anstrich, damit das Feld nicht nachträglich wächst.
+
+                     Die Hülle trägt den eigenen Winkel: `appearance: none`
+                     räumt den Systempfeil weg, und ein <select> kann kein
+                     Pseudo-Element tragen. Siehe styles/panels.css. -->
+                      <span class="pick-shell">
+                        <select id="vault-timeout" class="pick">
+                          <option value="60000">1 minute</option>
+                          <option value="300000" selected>5 minutes</option>
+                          <option value="900000">15 minutes</option>
+                        </select>
+                      </span>
+                      <label class="vault__check">
+                        <input type="checkbox" id="vault-hide-lock" checked />
+                        <span data-i18n="vault.lockOnHide">and when the tab is left</span>
+                      </label>
+                    </p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <!-- ══ Fuß ═══════════════════════════════════════════════════════ -->
+      <footer class="colophon">
+        <p class="colophon__specs" translate="no" dir="ltr">
+          <span>RFC 6238</span><span>RFC 4226</span><span>RFC 4648</span>
+        </p>
+
+        <!-- Die Sprachwahl sitzt im Fuß und nicht im Kopf: Sie wird einmal
+             eingestellt und dann nie wieder angefasst — wie die Angaben auf
+             einem Typenschild. -->
+        <p class="colophon__lang">
+          <label for="lang-select" class="colophon__langLabel" data-i18n="lang.label"
+            >Language</label
+          >
+          <span class="pick-shell">
+            <select
+              id="lang-select"
+              class="pick"
+              data-i18n-attr="aria-label=lang.aria"
+              aria-label="Choose language"
+            ></select>
+          </span>
+        </p>
+
+        <p class="colophon__note" data-i18n="colophon.note">
+          No network · no storage · HMAC via the Web Crypto API
+        </p>
+      </footer>
+    </div>
+
+    <!-- Nur für Nutzeraktionen (Kopieren, Import). Die rotierenden Codes sind
+         bewusst NICHT live — sonst läse ein Screenreader alle 30 Sekunden jeden
+         Code vor. -->
+    <p class="sr-only" id="live-region" role="status" aria-live="polite"></p>
+
+    <!--
+      Kanalzug pro Konto. Wird geklont statt per innerHTML gebaut: Alle Werte aus
+      der Eingabe gehen ausschließlich über textContent ins DOM und können
+      deshalb nie als HTML interpretiert werden.
+
+      Der Inhalt eines <template> steht NICHT im Dokumentbaum — die
+      data-i18n-Auszeichnungen hier erreicht der Durchlauf über `document`
+      also nicht. strip.ts übersetzt deshalb jeden Klon einzeln.
+    -->
+    <template id="tpl-strip">
+      <article class="strip">
+        <!-- Das Zifferblatt ist seit V8 eine reine Zone: nur das Blatt, kein Text
+             darunter. Die Sekundenzahl stand bis V7 hier und hat die Gruppe
+             höher gemacht als das Blatt selbst — damit stand das Blatt nicht
+             mehr in der senkrechten Mitte der Karte. Sie steht jetzt in der
+             Metazeile bei den anderen Nebenangaben. -->
+        <div class="gauge">
+          <svg class="dialface" data-gauge aria-hidden="true" focusable="false"></svg>
+        </div>
+
+        <!-- Kopfzeile: Name links, Parameter-Chip rechts. -->
+        <div class="strip__head">
+          <p class="strip__id">
+            <span class="strip__issuer" data-issuer></span>
+            <span class="strip__account" data-account></span>
+          </p>
+          <!-- Die Parameter tragen die Signal-Tönung (chip--accent): Sie sind
+               die Angabe MIT Bedeutung — „1 Konto" daneben bleibt neutral. -->
+          <p class="chip chip--accent strip__spec" data-spec translate="no"></p>
+        </div>
+
+        <output class="dial" data-dial aria-live="off" translate="no" dir="ltr"></output>
+
+        <!-- „FOLGT 483 232 · 17 s". Zwei Nebenangaben, die bis V7 an zwei Stellen
+             standen. Der Trennpunkt ist gesetzt, nicht getippt (styles/style.css)
+             — beide Angaben sind eigenständig, keine Sprache braucht sie in
+             anderer Reihenfolge.
+
+             `dir="ltr"` sitzt an den beiden lateinischen Stücken und nicht an der
+             ganzen Zeile: „folgt" ist übersetzter Text und gehört in die
+             Leserichtung der Oberfläche. -->
+        <p class="strip__meta">
+          <span class="strip__metaLabel" data-i18n="strip.next">next</span>
+          <span class="strip__nextCode" data-next translate="no" dir="ltr"></span>
+          <!-- Der Einzug steckt IM Tag und nicht zwischen den Tags: Ein Umbruch
+               nach `>` wäre ein Textknoten, und der wird zu einem Leerzeichen
+               hinter dem gesetzten Trennpunkt (styles/style.css,
+               .strip__secs::before). Zusammen mit dessen Abstand stünde dahinter
+               mehr Luft als davor — ein Trenner, der nicht mittig sitzt.
+               Nachgemessen sind es jetzt 8 px vor und 8 px nach dem Punkt,
+               dieselben wie um den Trenner im Fuß. -->
+          <span class="strip__secs" dir="ltr"
+            ><span data-seconds>–</span
+            ><abbr
+              data-i18n="strip.seconds.abbr"
+              data-i18n-attr="title=strip.seconds.title"
+              title="seconds"
+              >s</abbr
+            >
+            <span class="sr-only" data-i18n="strip.seconds.valid">valid</span>
+          </span>
+        </p>
+
+        <button type="button" class="key key--default key--copy" data-copy>
+          <svg class="key__icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <rect x="5.6" y="5.6" width="8.2" height="8.2" rx="2.25" />
+            <path
+              d="M10.6 3.4v-.65a1.5 1.5 0 0 0-1.5-1.5H3.7a1.5 1.5 0 0 0-1.5 1.5v5.4a1.5 1.5 0 0 0 1.5 1.5h.7"
+            />
+          </svg>
+          <span data-copy-label data-i18n="key.copy">Copy</span>
+        </button>
+      </article>
+    </template>
+
+    <template id="tpl-fault">
+      <article class="strip strip--fault">
+        <div class="strip__head">
+          <p class="strip__id">
+            <span class="strip__issuer" data-i18n="fault.title">Line not readable</span>
+            <span
+              class="strip__account strip__account--src"
+              data-source
+              translate="no"
+              dir="ltr"
+            ></span>
+          </p>
+        </div>
+        <p class="fault__text" data-message></p>
+      </article>
+    </template>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

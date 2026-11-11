@@ -1,0 +1,98 @@
+.manager-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-block: 0.65rem;
+}
+.manager-help {
+  color: var(--ink-muted, #666);
+  font-size: 0.8rem;
+  line-height: 1.65;
+  margin-block: 0.5rem 1rem;
+}
+.manager-help--error,
+.manager-error {
+  color: #ad3d28;
+}
+.manager-entry-actions {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-block-start: 0.8rem;
+}
+.manager-entry-actions .key {
+  font-size: 0.75rem;
+  min-height: 2rem;
+  padding-inline: 0.75rem;
+}
+.manager-dialog {
+  box-sizing: border-box;
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1.6rem;
+  border: 1px solid #d5d3ce;
+  border-radius: 1.1rem;
+  background: var(--surface, #fff);
+  color: var(--ink, #20201e);
+  font: inherit;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+.manager-dialog::backdrop {
+  background: rgb(20 20 18 / 35%);
+  backdrop-filter: blur(3px);
+}
+.manager-dialog h2 {
+  font-size: 1.2rem;
+  margin-block: 0 1rem;
+}
+.manager-dialog p {
+  line-height: 1.7;
+}
+.manager-field {
+  display: grid;
+  gap: 0.4rem;
+  margin-block: 1rem;
+  font-size: 0.85rem;
+}
+.manager-field input,
+.manager-secret {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #b6b4ae;
+  border-radius: 0.5rem;
+  font: inherit;
+  background: transparent;
+  color: inherit;
+}
+.manager-field input:focus,
+.manager-secret:focus {
+  outline: 2px solid #c5633b;
+  outline-offset: 2px;
+}
+.manager-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-block-start: 1.4rem;
+}
+.manager-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid #cecac0;
+  border-radius: 0.6rem;
+  margin-block-start: 1rem;
+  font-size: 0.8rem;
+}
+.manager-notice[hidden] {
+  display: none;
+}
+@media (max-width: 40rem) {
+  .manager-entry-actions {
+    grid-column: 1 / -1;
+  }
+}

@@ -1,5 +1,13 @@
 # MFA TOTP Manager
 
+## 浏览器版本 / Browser version
+
+新增基于 Clockwork 的纯本地网页版，见 [web/README.md](web/README.md)。
+直接下载并打开 [web/clockwork.html](web/clockwork.html) 即可使用：支持批量粘贴、二维码导入、逐条改名与编辑、可选账号密码、免密自动保存，以及删除确认和撤销。验证码计算和历史保存均在浏览器完成。
+
+A browser-only edition based on Clockwork is available in [web/](web/README.md).
+Open [web/clockwork.html](web/clockwork.html) for batch input, QR import, per-account editing, optional account passwords, automatic local storage, and confirmed deletion with undo.
+
 本项目是一个轻量、本地优先的 MFA / TOTP 计算器，使用 Python 标准库和 `Tkinter` 构建桌面 GUI。它支持直接输入 Base32 密钥或 `otpauth://totp/...` URI，实时刷新验证码，并保存最近输入历史与界面语言偏好。
 
 MFA TOTP Manager is a lightweight, local-first MFA / TOTP calculator built with the Python standard library and `Tkinter`. It accepts raw Base32 secrets or `otpauth://totp/...` URIs, refreshes codes in real time, and stores recent input history together with the UI language preference.

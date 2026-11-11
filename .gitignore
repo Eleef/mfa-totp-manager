@@ -9,3 +9,12 @@ build/
 venv/
 mfa_history.json
 mfa_settings.json
+web/node_modules/
+web/dist/
+web/dist-single/
+web/play/
+web/android/
+web/branding/
+web/fastlane/
+web/tmp/
+web/clockwork-backup*.json

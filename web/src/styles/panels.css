@@ -1,0 +1,967 @@
+/* =============================================================================
+   Tresor und QR-Sucher
+
+   Beide sind Zustände des Geräts, keine Overlays. Es gibt kein Modal, keinen
+   abgedunkelten Hintergrund, keine Dialogbox — das Gerät wechselt sichtbar in
+   einen anderen Betriebszustand, und man sieht dabei weiter alles andere.
+   ========================================================================== */
+
+/* ── Tresor ───────────────────────────────────────────────────────────────── */
+
+.vault {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack);
+}
+
+/* ── Der Tresor als Aufklapper ────────────────────────────────────────────
+   In der Rail des Arbeitszustands ist der Tresor sonst der größte Block der
+   Bedienseite — für eine Funktion, die man einmal einrichtet und danach nie
+   wieder anfasst.
+
+   Die Statuszeile bleibt die Zusammenfassung und damit immer sichtbar: Ob
+   etwas gespeichert ist, muss ablesbar sein, ohne dass man etwas öffnet.
+   Alles, womit man etwas TUT, liegt dahinter.
+
+   ── Warum die Statuszeile keine Gravur mehr ist ───────────────────────────
+   Weil sie ein SATZ ist und keine Beschriftung. „Aus — es wird nichts
+   gespeichert", „Offen — Secrets liegen im Textfeld": Das sind Auskünfte mit
+   Gedankenstrich, nicht Wörter auf einem Gehäuse.
+
+   Bis V7 stand sie in 11 px gesperrten Versalien, und das ging in der Rail nicht
+   auf: Nachgemessen bleiben zwischen Leuchte und Winkel 289 px, der deutsche
+   Satz brauchte mehr. Er brach auf zwei Zeilen — und weil Leuchte und Winkel
+   senkrecht zentriert sind, saßen beide danach ZWISCHEN den Zeilen statt neben
+   der ersten. Sichtbar war das als eine Zeile, an der nichts auf einer Höhe
+   steht.
+
+   Der Umbruch wäre auch reparierbar (Leuchte an die erste Zeile hängen), aber
+   das hätte das eigentliche Problem gelassen: Die wichtigste Auskunft des Panels
+   — liegt hier etwas gespeichert? — stand in der kleinsten und am weitesten
+   gesperrten Schrift, die die App kennt. Gesperrte Versalien sind für drei Wörter
+   auf einem Gehäuse gemacht, nicht für einen Satz, den man liest.
+
+   Jetzt: eine Stufe größer, normal gesetzt, etwas fester im Gewicht. Sie passt
+   in eine Zeile, und die Zustandsfarbe darunter kann tun, was sie soll. */
+.vault__state {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-pair);
+  font-size: var(--t-small);
+  font-weight: 550;
+  color: var(--ink-2);
+  cursor: pointer;
+  list-style: none;
+  /* Ein Aufklapper ist ein Bedienelement, keine Überschrift. Er bekommt deshalb
+     dieselbe Trefferhöhe wie eine Taste — eine 17 px hohe Zeile trifft man mit
+     dem Daumen nicht.
+
+     Die negativen Außenabstände plus derselbe Innenabstand: Die Trefferfläche
+     wächst, der Text bleibt, wo er im Raster steht.
+
+     44 px und nicht die 40 der Tastenleiter: Diese Zeile ist über die ganze
+     Panelbreite anklickbar, Höhe kostet hier also nichts. Wo sie nichts kostet,
+     nimmt man die AAA-Zielgröße. */
+  min-height: var(--touch-min);
+  margin: calc(var(--sp-2) * -1) calc(var(--sp-2) * -1);
+  padding: var(--sp-2);
+  border-radius: var(--radius-item);
+  transition: background-color var(--dur-flash) var(--ease-snap);
+}
+
+/* Der Trigger ist im Sinn der Referenz eine Ghost-Taste: Der Hover ist eine
+   Fläche, wie beim Aufklapper der Eingabeformate. */
+.vault__state:hover {
+  background: var(--fill-soft);
+}
+
+.vault__state::-webkit-details-marker {
+  display: none;
+}
+
+/* Der Winkel steht am ENDE der Zeile, nicht davor: Die Statuszeile ist eine
+   Angabe, die man liest, und erst danach kommt das Angebot, sie aufzuklappen.
+   `margin-inline-start: auto` schiebt ihn dorthin — logisch, weil „Ende" eine
+   Leserichtung ist; die Drehung physisch, weil ein Winkel eine Form ist. */
+.vault__state::after {
+  content: '';
+  width: 0.42em;
+  height: 0.42em;
+  flex: none;
+  margin-inline-start: auto;
+  border-right: 1.5px solid var(--ink-3);
+  border-bottom: 1.5px solid var(--ink-3);
+  border-bottom-right-radius: 1px;
+  transform: translateY(-25%) rotate(45deg);
+  /* 250 ms auf der Feder, wie die beiden anderen Aufklapper des Geräts (der
+     Hinweis-Aufklapper und die V10-Zusammenfassungszeile) — und wie der
+     Disclosure-Indikator der Referenz, der ausdrücklich `duration-250` trägt,
+     während ihr Select-Indikator 150 nimmt.
+
+     Hier standen bis V11 150 ms auf `--ease-snap`. Das war kein Fehler mit
+     Wirkung, aber eine Ungereimtheit mit einer: Der Hinweis-Aufklapper liegt
+     INNERHALB dieses Aufklappers, und zwei ineinandergeschachtelte Winkel, die
+     verschieden schnell drehen, sehen aus wie zwei Bauteile aus zwei
+     Systemen. */
+  transition: transform var(--dur-calm) var(--ease-spring);
+}
+
+.vault__disclosure[open] .vault__state::after {
+  transform: translateY(10%) rotate(225deg);
+}
+
+.vault__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack);
+  /* Zusammen mit dem Innenabstand der Statuszeile darüber (ebenfalls 8) ergibt
+     das eine Stapelfuge — die Statuszeile ist die Kopfzeile dieses Blocks, und
+     zwischen Kopfzeile und Inhalt steht derselbe Abstand wie zwischen zwei
+     Geschwistern darin. */
+  padding-block-start: var(--gap-pair);
+}
+
+/* Erklärung und Aufklapper als eine Einheit — sie erscheinen und verschwinden
+   zusammen (siehe ui/vault-panel.ts). */
+.vault__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-pair);
+}
+
+/* ── Die drei Zustände, in Form UND Farbe ──────────────────────────────────
+   Aus = leerer Ring, gesperrt = gefüllt in Ink, offen = gefüllt im Akzent.
+   Nie NUR über Farbe: Ring gegen Fläche ist ein Formunterschied, und der bleibt
+   auch für jemanden lesbar, der die beiden Töne nicht unterscheiden kann.
+
+   Seit V8 zieht die Statuszeile mit. Bis V7 stand sie in allen drei Zuständen in
+   derselben Graustufe, und nur die 8-px-Leuchte davor sagte, was gilt — für die
+   wichtigste Auskunft des Panels („liegt hier etwas gespeichert?") war das der
+   leiseste verfügbare Ton.
+
+   Die Leiter geht mit dem Gewicht der Auskunft:
+
+     aus       --ink-3           es gibt nichts zu wissen
+     gesperrt  --ink             hier liegt etwas, und es ist zu
+     offen     --signal-text     einer der vier Zustände mit Bedeutung */
+.vault__lamp {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--ink-3);
+  background: transparent;
+}
+
+.vault[data-state='locked'] .vault__lamp {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.vault[data-state='locked'] .vault__state {
+  color: var(--ink);
+}
+
+/* Der Akzent, aber im tieferen der beiden Signal-Token. Eine 8-px-Scheibe ist
+   feine Geometrie, und für die gilt seit V8 dieselbe Grenze wie für Schrift:
+   Der Markenwert #f05a28 kommt auf Papier nur auf 3,06:1 und auf jeder
+   dunkleren Fläche der hellen Leiter darunter. Bis V7 stand hier `--signal`
+   auch für den TEXT der Statuszeile — das waren gemessene 3,06:1 für eine
+   Kleinschrift, die 4,5 braucht. */
+.vault[data-state='open'] .vault__lamp {
+  background: var(--signal-text);
+  border-color: var(--signal-text);
+}
+
+.vault[data-state='open'] .vault__state {
+  color: var(--signal-text);
+}
+
+.vault__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-pair);
+}
+
+.vault__form[hidden] {
+  display: none;
+}
+
+/* `center` statt `stretch`: Gestreckt zog der Knopf sich auf die Höhe des
+   Feldes, und eine Pille von 3 rem Höhe ist keine Taste mehr, sondern eine
+   Kapsel. Beide stehen jetzt auf derselben Höhe, weil beide dieselbe Höhe
+   HABEN — nicht, weil einer den anderen mitzieht. */
+.vault__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-pair);
+  align-items: center;
+}
+
+/* ── Und wieder die Kaskadenfalle, zum dritten Mal ─────────────────────────
+   Dieses Bauteil stand seit V5 hier als `.vault__pass` — und zwei seiner drei
+   Zeilen haben nie gewirkt.
+
+   `.field` (src/style.css) und `.vault__pass` (diese Datei) haben dieselbe
+   Spezifität. `@import`-Regeln stehen IMMER vor den eigenen Regeln der
+   importierenden Datei, also gewinnt `.field`. Und `.field` setzt `padding` als
+   Kurzschreibweise und `line-height: 1.7` — beides hat das hier Notierte
+   überschrieben.
+
+   Gemessen kam das Feld damit auf 51,5 px, neben einem 40-px-Knopf. Der
+   Kommentar an dieser Stelle behauptete drei Versionen lang, beide hätten
+   dieselbe Höhe, „weil beide dieselbe Höhe HABEN". Sie hatten sie nicht.
+
+   Es ist derselbe Fehler wie beim 6 rem hohen Passwortfeld in V2 und bei der
+   unsichtbaren Warnfarbe in V5 — an genau diesem Bauteil sogar zum zweiten Mal.
+   Die Lehre steht seit V5 in CLAUDE.md und lautet: Ein Bauteil in einer
+   importierten Datei, das eine Basisklasse überschreibt, braucht die DOPPELTE
+   Klasse. Nicht die Hoffnung auf eine Zeilennummer. */
+.field.vault__pass {
+  flex: 1 1 16rem;
+  min-width: 0;
+  /* `min-height` ist eine Untergrenze, kein Maß: Die 12 px senkrechter
+     Innenabstand aus der Basis kommen oben drauf. Ein einzeiliges `<input>`
+     zentriert seinen Text selbst — die Höhe macht `min-height`, nicht das
+     Polster. */
+  min-height: var(--control-h);
+  padding-block: 0;
+  line-height: 1.4;
+  font-family: var(--font-mono);
+}
+
+/* ── Autofill ─────────────────────────────────────────────────────────────
+   Geprüft, bevor etwas gebaut wurde: Bietet dieses Feld überhaupt Autofill an?
+   Ja, und zwar absichtlich. Es ist das EINZIGE Feld des Geräts mit einem
+   `autocomplete`-Wert — Textfeld und Filter tragen beide `off`, und dieses
+   hier wechselt in ui/vault-panel.ts zwischen `new-password` und
+   `current-password`. Das ist die richtige Entscheidung und bleibt: Eine
+   Tresor-Passphrase gehört in einen Passwortmanager, nicht auf einen Zettel.
+
+   Damit greift aber auch der Autofill-Anstrich des Browsers, und der ist ein
+   hellblaues bzw. gelbes Rechteck aus der Benutzeroberfläche — mitten in einem
+   Gerät, das seine Flächen nachrechnet, und im dunklen Modus ein Leuchtkasten.
+
+   Der Griff ist der der Referenz (`input-group.css`): ein Innenschatten von
+   1000 px in der Feldfläche legt sich über den Anstrich, Text- und Cursorfarbe
+   werden ausdrücklich gesetzt, und `transition: background-color 9999s`
+   verhindert, dass der Browser die Fläche beim Fokuswechsel doch noch kurz
+   durchblitzen lässt.
+
+   Anders als bei der Referenz steht hier NICHT `transparent`: Deren Feld hat
+   eine eigene Fläche darunter, unseres bekommt seine aus `--surface-fill` —
+   durchsichtig hieße hier, den Anstrich durchzulassen.
+
+   Doppelte Klasse, wie an jedem Bauteil dieser Datei, das `.field`
+   überschreibt: `@import` steht vor den eigenen Regeln der importierenden
+   Datei. */
+.field.vault__pass:-webkit-autofill,
+.field.vault__pass:-webkit-autofill:hover,
+.field.vault__pass:-webkit-autofill:focus,
+.field.vault__pass:autofill {
+  box-shadow: 0 0 0 1000px var(--surface-fill) inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.vault__error {
+  font-size: var(--t-small);
+  color: var(--fault);
+  min-height: 1.2em;
+}
+
+/* Die Regel steht jetzt gesammelt bei den Live-Regionen in src/style.css: Eine
+   leere Meldung verlässt den Fluss ganz, statt nur ihre Höhe abzugeben. */
+
+/* ── Warum hier .key.key--danger steht und nicht .key--danger ──────────────
+   Weil das Einfache nicht funktioniert hat, und zwar seit V2 unbemerkt.
+
+   `.key` (style.css) und `.key--danger` (diese Datei) haben dieselbe
+   Spezifität. Welche gewinnt, entscheidet dann die Reihenfolge — und
+   `@import`-Regeln stehen IMMER vor den eigenen Regeln der importierenden
+   Datei. Also gewann `.key { color: var(--ink-2) }`, und der Löschknopf trug
+   dieselbe Farbe wie jeder andere: gemessen `rgb(92, 88, 82)` statt `#9c2f1c`.
+
+   Gesehen hat das keiner, weil der Knopf nur bei offenem Tresor auftaucht und
+   dort neben zwei gleich aussehenden Geschwistern steht. Genau die
+   Kaskaden-Kollision, die in diesem Projekt schon einmal zugeschlagen hat —
+   damals war ein Passwortfeld 6 rem hoch, diesmal war eine Warnfarbe
+   unsichtbar.
+
+   Der doppelte Klassenname hebt die Spezifität auf (0,2,0) und macht das
+   Bauteil damit unabhängig von der Import-Reihenfolge. Das ist die Sorte
+   Wiederholung, die man schreibt, weil ihre Abwesenheit teuer war.
+
+   Seit V9 trägt der Löschknopf das `danger-soft`-Muster der Referenz mit
+   Clockworks Fehlerton: eine leise Tönung statt eines Umrisses — Umrisse gibt
+   es im Tastensatz nicht mehr. Er unterscheidet sich von seinen Geschwistern
+   durch die FARBE, nicht durch die Bauart. */
+.key.key--danger {
+  --key-bg: var(--fault-soft);
+  --key-bg-hover: var(--fault-soft-hover);
+  --key-ink: var(--fault-soft-ink);
+}
+
+/* Der scharfgestellte Zustand hatte durch das Attribut schon genug Gewicht und
+   war deshalb nie kaputt. Er trägt die doppelte Klasse trotzdem — sonst steht
+   in einer Datei zweierlei Schreibweise für dasselbe Bauteil, und die nächste
+   Person muss raten, welche gilt.
+
+   Scharfgestellt wird er DECKEND (die `danger`-Vollvariante der Referenz):
+   Die Schrift darauf ist die Panelfläche — gemessen 7,7:1 hell und 7,0:1
+   dunkel gegen den jeweiligen Fehlerton. */
+.key.key--danger[data-armed] {
+  --key-bg: var(--fault);
+  --key-bg-hover: var(--fault);
+  --key-ink: var(--surface);
+}
+
+.vault__config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-pair);
+  font-size: var(--t-small);
+  color: var(--ink-3);
+}
+
+.vault[data-state='off'] .vault__config {
+  display: none; /* Ohne Tresor gibt es nichts zu sperren. */
+}
+
+/* ── Auswahlfeld ──────────────────────────────────────────────────────────
+   Ein `<select>` bleibt ein `<select>`: echtes Bedienelement, echte
+   Tastaturbedienung, echte Systemliste beim Aufklappen. Getauscht wird nur das
+   Aussehen der geschlossenen Fläche — und mit ihr der Pfeil.
+
+   Warum überhaupt: Der Systempfeil ist auf jeder Plattform ein anderes Zeichen
+   und auf Windows ein hartes Dreieck. Neben Pillen mit 1,5-px-Rundstrich sieht
+   das aus wie ein Formularfeld, das jemand vergessen hat. Der eigene Winkel
+   stammt aus derselben Strichlogik wie die Bedien-Icons.
+
+   Die Hülle trägt den Pfeil, nicht das Feld selbst: `appearance: none` räumt
+   den Systempfeil weg, aber ein `<select>` kann kein Pseudo-Element tragen. */
+.pick-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Der Winkel. Zwei Striche als CSS-Kante, damit kein Bild und keine zweite
+   Datei nötig ist — und weil er so dieselbe Stärke hat wie alles andere.
+
+   ── Warum hier physische Kanten stehen ────────────────────────────────────
+   Die POSITION des Winkels ist eine Leserichtung: Er sitzt am Ende des Feldes,
+   also rechts im Deutschen und links im Arabischen — dafür `inset-inline-end`.
+
+   Seine FORM ist keine. Ein Winkel, der „nach unten" zeigt, zeigt in jeder
+   Sprache nach unten. Mit `border-inline-end` wurden daraus im Arabischen die
+   linke und die untere Kante, und nach der 45°-Drehung zeigte er nach links —
+   aus „aufklappen" wurde „zurück". Gesehen auf dem RTL-Screenshot, nicht
+   gedacht.
+
+   Es ist dieselbe Unterscheidung wie beim Zifferblatt und beim Signal-Index in
+   styles/mark.css: Was eine Leserichtung hat, steht logisch; was eine
+   Geometrie ist, steht physisch. */
+.pick-shell::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: var(--sp-3);
+  inset-block-start: calc(50% - 0.22em);
+  width: 0.42em;
+  height: 0.42em;
+  border-right: 1.5px solid var(--ink-3);
+  border-bottom: 1.5px solid var(--ink-3);
+  border-bottom-right-radius: 1px;
+  transform: translateY(-25%) rotate(45deg);
+  pointer-events: none;
+  /* 150 ms wie der Select-Indikator der Referenz (`.select__indicator`:
+     `transition duration-150`, `[data-open] { rotate-180 }`) — dieselbe
+     Dauer wie die Feldfläche darunter, damit Fläche und Winkel eine
+     Bewegung sind und nicht zwei. */
+  transition: transform var(--dur-quick) var(--ease-snap);
+}
+
+/* ── Aufgeklappt: der Winkel dreht ────────────────────────────────────────
+   Bis V11 stand er starr — als einziger Aufklapper-Winkel des Geräts. Tresor
+   und Hinweis drehen seit V8 bzw. V9, das Auswahlfeld nicht: Es hatte bis zur
+   Listbox gar keinen Zustand, den es hätte anzeigen können, und danach hat es
+   niemand nachgezogen.
+
+   Der Zustand steht am KNOPF (`aria-expanded`, gesetzt in ui/listbox.ts) und
+   der Winkel an der HÜLLE — ein `<select>` kann kein Pseudo-Element tragen,
+   deshalb liegt er dort. `:has()` verbindet beides, ohne dass das Skript eine
+   zweite Klasse pflegen muss: Der Zustand hat schon einen Namen, und der ist
+   der barrierefreie. (Ab Chrome 105 verfügbar; die WebView-Untergrenze des
+   APK ist 111, siehe capacitor.config.ts. Dieselbe Technik wie bei
+   `.keys:has(.keys__gap)` weiter unten.)
+
+   Ohne Listbox — also ohne Skript — gibt es keinen `aria-expanded`-Knopf und
+   damit auch keine Drehung. Richtig so: Dann klappt die Systemliste auf, und
+   die hat ihren eigenen Zeiger. */
+.pick-shell:has(.pick--button[aria-expanded='true'])::after {
+  transform: translateY(10%) rotate(225deg);
+}
+
+.pick {
+  appearance: none;
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ink-2);
+  /* Ausdrücklich gesetzt, nicht geerbt: Ein `<select>` ohne eigene Farbangabe
+     zieht sich unter Windows im dunklen Modus die Systemfarben und steht dann
+     als weißer Kasten in einem schwarzen Gerät.
+
+     Seit V9 der Select-Trigger der Referenz: eine flache Feldfläche, kein
+     Rahmen, keine Fräsung — Fläche und Radius wie jedes andere Feld. */
+  background: var(--surface-fill);
+  border: 0;
+  border-radius: var(--radius-field);
+  /* Rechts Platz für den Winkel. Senkrecht ohne Innenabstand: Ein einzeiliges
+     `<select>` zentriert seinen Text selbst, und die Höhe steht darunter. */
+  padding-block: 0;
+  padding-inline: var(--sp-3) var(--sp-6);
+  /* Der Select-Trigger der Referenz ist fest min 36 px (`min-h-9`) — die
+     einzige Höhe der Leiter ohne Touch-Schrumpfstufe: Sprache und Sperrzeit
+     stellt man einmal ein und fasst sie danach nie wieder an. */
+  min-height: var(--control-h-sm);
+  width: 100%;
+  cursor: pointer;
+  transition: background-color var(--dur-quick) var(--ease-snap);
+}
+
+.pick:hover {
+  background: var(--fill-active);
+}
+
+/* ── Die Listbox ──────────────────────────────────────────────────────────
+   Der Aufsatz auf dem nativen Feld (ui/listbox.ts). Er übernimmt dessen
+   Aussehen im geschlossenen Zustand — und gestaltet endlich auch den offenen.
+
+   Das native Feld bleibt im Dokument, aber unsichtbar. Bewusst NICHT
+   `display: none`: Ein so entferntes Feld meldet in manchen Browsern keine
+   `change`-Ereignisse mehr, und genau die sind hier die Kupplung zwischen
+   Aufsatz und Wahrheit. */
+.pick--replaced {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Der Knopf ist dasselbe Bauteil wie das Feld — er erbt `.pick` und bringt nur
+   die Textausrichtung mit, die ein `<button>` nicht von sich aus hat. */
+.pick--button {
+  display: inline-flex;
+  align-items: center;
+  text-align: start;
+}
+
+.pick__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Das Popover der Referenz: Overlay-Fläche, großer Radius, Overlay-Schatten —
+   hell die dreilagige Diffusion, dunkel die 1-px-Innenlichtkante (beides
+   steckt in --elev-2, tokens.css). Kein Rahmen. Beim Öffnen fährt es in
+   150 ms ein (Fade + zoom-in-95 + 4 px aus seiner Richtung), wie das
+   Select-Popover der Referenz; die globale reduced-motion-Regel in style.css
+   schaltet die Animation mit ab.
+
+   ── Der Eintritt steht HIER, der Abgang in ui/listbox.ts ──────────────────
+   Und zwar genau einmal, seit V11. Bis dahin liefen zwei Eintritte
+   übereinander: diese CSS-Animation und ein zweites `list.animate()` im
+   Skript, 250 ms und mit `translateY(-4px)` — also von OBEN, obwohl das Panel
+   nach oben aufklappt und folglich von unten kommen muss. Nachgewiesen am
+   laufenden Gerät über `getAnimations()` (zwei Einträge, CSSAnimation 150 ms
+   und WAAPI 250 ms), nicht im Quelltext vermutet. Die JS-Fassung ist weg; das
+   CSS ist die eine Quelle.
+
+   Der Abgang kann nicht hier stehen: Wer `hidden` setzt, nimmt das Element aus
+   dem Layout, bevor eine CSS-Animation laufen könnte. Er läuft deshalb über
+   die Web Animations API, und `hidden` kommt erst nach `finished`. */
+.listbox {
+  position: absolute;
+  inset-inline: 0;
+  /* Nach OBEN aufklappen: Der Umschalter sitzt im Fuß, und dort ist unten
+     nichts mehr. */
+  inset-block-end: calc(100% + var(--sp-2));
+  z-index: 20;
+  max-block-size: min(60vh, 22rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 8 px Rand + 16 px Zeilenradius = 24 px Panelradius: Die Rundungen laufen
+     konzentrisch, nichts stößt an. */
+  padding: var(--sp-2);
+  background: var(--surface);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--elev-2);
+  transform-origin: bottom center;
+  animation: listbox-in var(--dur-quick) var(--ease-spring);
+}
+
+@keyframes listbox-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.95);
+  }
+}
+
+.listbox[hidden] {
+  display: none;
+}
+
+/* Während des Abgangs steht das Panel noch 100 ms im Bild, ist aber nicht mehr
+   gemeint. Ohne diese Zeile schluckte es genau in dieser Zeitspanne den Klick,
+   mit dem jemand daneben etwas anderes treffen wollte — und der Klick nach
+   außen ist der häufigste Weg, ein Popover zu schließen.
+
+   Der Attributname ist der der Referenz (`[data-exiting="true"]`); gesetzt
+   wird er in ui/listbox.ts. */
+.listbox[data-exiting] {
+  pointer-events: none;
+}
+
+.listbox__option {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-h-sm);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-item);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Der Druckpunkt der Referenz (`.list-box-item:active { scale(0.98) }`,
+     transform über 250 ms). Eine Zeile in einer Liste ist ein Bedienelement
+     wie eine Taste — und die gibt seit V9 um 3 % nach. Eine Listenzeile ist
+     breiter, also reichen 2 %: Derselbe Weg in Pixeln fiele bei 320 px
+     Breite sonst doppelt so weit aus wie an einer 80-px-Taste. */
+  transition: transform var(--dur-calm) var(--ease-spring);
+}
+
+.listbox__option:active {
+  transform: scale(0.98);
+}
+
+/* Die aktive Zeile — die, auf der Tastatur oder Maus gerade steht. Der
+   Hover-Ton der Referenz-Listenzeile ist die Feldfüllung (`bg-default`). */
+.listbox__option.is-active {
+  background: var(--surface-fill);
+  color: var(--ink);
+}
+
+/* Die gewählte Sprache: Häkchen am Ende der Zeile, wie der
+   Auswahl-Indikator der Referenz — dazu der Akzent, denn „das hier gilt
+   gerade" ist einer der Zustände mit Bedeutung. Das Häkchen ist derselbe
+   Zwei-Strich-Winkel wie die Chevrons, nur anders gedreht. */
+.listbox__option[aria-selected='true'] {
+  color: var(--signal-text);
+  font-weight: 600;
+}
+
+.listbox__option[aria-selected='true']::after {
+  content: '';
+  width: 0.36em;
+  height: 0.62em;
+  flex: none;
+  margin-inline-start: auto;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(40deg);
+  /* Das Häkchen wächst herein, statt dazustehen — der Auswahl-Indikator der
+     Referenz (`.menu-item__indicator [data-slot=…--dot]`: Ruhe `scale-70
+     opacity-0`, gewählt `scale-100 opacity-100`, 250 ms).
+
+     ── Warum @keyframes und nicht transition ────────────────────────────────
+     Weil es dieses Pseudo-Element vorher gar nicht GIBT: `content` steht erst
+     unter `[aria-selected='true']`. Ein Übergang braucht zwei Zustände an
+     einem bestehenden Kasten; hier entsteht der Kasten mit dem Zustand. Eine
+     Animation braucht nur einen Anfangswert und läuft beim Entstehen los —
+     auch dann, wenn die Liste aufgeht und alles neu gezeichnet wird.
+
+     Kein Abgang: Wer die Sprache wechselt, sieht das alte Häkchen sofort
+     verschwinden. Die Referenz macht es genauso und begründet es in
+     select.css — bei einfacher Auswahl schließt das Popover so schnell, dass
+     von einem Abgang nichts mehr zu sehen wäre. */
+  animation: listbox-check-in var(--dur-calm) var(--ease-spring);
+}
+
+@keyframes listbox-check-in {
+  from {
+    opacity: 0;
+    transform: rotate(40deg) scale(0.7);
+  }
+}
+
+.vault__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-pair);
+}
+
+/* ── Schalter ─────────────────────────────────────────────────────────────
+   Der Switch der Referenz, gezeichnet auf dem echten `<input
+   type="checkbox">`. Kein nachgebautes div mit `role="switch"`: Das Original
+   bringt Fokus, Tastatur, Beschriftungsbindung und den Zustand für
+   Screenreader schon mit.
+
+   Geometrie exakt aus @heroui/styles (Größe md): Bahn 40 × 20 px, Daumen
+   22 × 16 px mit 2 px Rand, Weg 14 px, Daumenfahrt 300 ms auf der Federkurve.
+   Der Daumen ist IMMER Snow mit Feldschatten — wie bei der Referenz, deren
+   `.switch__thumb` fest `bg-white` trägt.
+
+   Eingeschaltet ist die Bahn ACCENT, also Signal-Orange. Das ist eine
+   V9-Entscheidung gegen die V8-Regel („an" in Tinte): In einem HeroUI-Theme
+   ist der Accent die Farbe jedes eingeschalteten Schalters — die Regel „genau
+   ein Akzent" bleibt wahr, sie umfasst jetzt auch diesen Zustand. */
+.vault__check input {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 1.25rem;
+  margin: 0;
+  background: var(--surface-fill);
+  border: 0;
+  border-radius: var(--radius-key);
+  cursor: pointer;
+  transition: background-color var(--dur-calm) var(--ease-spring);
+}
+
+.vault__check input::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  width: 1.375rem;
+  height: 1rem;
+  border-radius: var(--radius-inset);
+  background: var(--switch-thumb);
+  box-shadow: var(--elev-1);
+  /* Der Daumen fährt, er blendet nicht um: `translate` bleibt auf dem
+     Compositor und läuft auch auf einem müden Gerät flüssig. */
+  transition: transform var(--dur-glide) var(--ease-spring);
+}
+
+.vault__check input:checked {
+  background: var(--signal);
+}
+
+.vault__check input:checked::before {
+  /* Bahnbreite minus Daumen minus beide Ränder: 40 − 22 − 4 = 14 px. */
+  transform: translateX(0.875rem);
+}
+
+/* Rechtsläufig fährt der Daumen nach links — sonst säße er im eingeschalteten
+   Zustand auf der falschen Seite der Bahn. */
+:root[dir='rtl'] .vault__check input:checked::before {
+  transform: translateX(-0.875rem);
+}
+
+.vault__check input:hover:not(:checked) {
+  background: var(--fill-active);
+}
+
+/* ── Scrollflächen: Kantenzeichen und Balken ───────────────────────────────
+   Zwei Stellen im Gerät scrollen eigenständig — die Bedienseite ab 64 rem und
+   dieses Popover. Beide bekommen dasselbe: einen schmalen Balken aus dem
+   Standard und eine Kante, die nur dann da ist, wenn dahinter wirklich etwas
+   liegt (geschaltet von ui/scroll-edge.ts).
+
+   ── Warum die Kante eine Maske ist ────────────────────────────────────────
+   Weil `.rail` keinen eigenen Grund hat: weiße Karten auf hellgrauem
+   Seitengrund. Ein Verlauf in `--surface` läge als weißer Streifen über dem
+   Grund, einer in `--ground` als grauer über den Karten — es gibt keine Farbe,
+   die an beiden Stellen stimmt. Eine Maske blendet aus, was da ist, statt
+   etwas darüberzulegen. Genau deshalb arbeitet auch `scroll-shadow.css` der
+   Referenz mit `mask-image`.
+
+   ── Warum die Fade-Länge eine registrierte Eigenschaft ist ────────────────
+   Ein `mask-image` lässt sich nicht überblenden — Bilder sind diskret. Eine
+   über `@property` registrierte Länge dagegen schon, und damit wächst die
+   Kante in 150 ms herein statt aufzuspringen. Ab Chrome 85, also weit
+   unterhalb der WebView-Untergrenze 111. */
+@property --fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* ── Die Kaskadenfalle, zum vierten Mal — und diesmal in derselben Datei ───
+   Hier stand `position: relative`, damit der obere Fühler sich auf seine
+   Scrollfläche bezieht. Das war als Absicherung gedacht und war ein Fehler:
+   `.scroll-edge` steht in dieser Datei WEITER UNTEN als `.listbox`, beide
+   haben dieselbe Spezifität — also gewann `relative` gegen das `absolute` des
+   Popovers. Die Folge war auf einem Bildschirmfoto sofort zu sehen und in
+   keinem Testlauf: Das Sprach-Popover fiel in den Fluss, verlor seine Breite
+   (die Sprachnamen waren abgeschnitten) und klappte nach unten statt nach oben.
+
+   Es ist derselbe Fehler wie in V6, als
+   `.zone, .colophon, .masthead { position: relative }` den klebenden Kopf von
+   `sticky` zurücksetzte — eine Sammelregel, die eine Einzelregel weiter oben
+   tötet.
+
+   `:where()` hat die Spezifität 0 und kann damit nichts überschreiben. Es ist
+   genau das, was hier gemeint war: ein RÜCKFALL für eine Scrollfläche, die
+   noch keine Position hat. Beide heutigen tragen längst eine — die Rail
+   `sticky`, das Popover `absolute` —, und beide sind damit von sich aus der
+   Bezugsrahmen ihres Fühlers. */
+:where(.scroll-edge) {
+  position: relative;
+}
+
+.scroll-edge {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  transition:
+    --fade-start var(--dur-quick) var(--ease-snap),
+    --fade-end var(--dur-quick) var(--ease-snap);
+}
+
+/* ── Warum die Maske nur dann dasteht, wenn sie etwas tut ──────────────────
+   Weil sie sonst eine Compositor-Ebene kostet, dauerhaft. Gemessen über
+   `LayerTree` bei acht Konten im Ruhezustand: 19 Ebenen mit der Maske, 18
+   ohne — die Fühler und die Balkenfarbe kosten nichts. 18 ist die Zusage aus
+   V8, und sie gilt weiter.
+
+   Der Preis dieser Lösung ist ehrlich zu nennen: Die Kante WÄCHST in 150 ms
+   herein (die Länge ist über @property registriert und damit animierbar),
+   verschwindet aber ohne Übergang — mit dem Attribut geht auch die Maske. Die
+   Referenz hat an derselben Stelle gar keinen Übergang (`scroll-shadow.css`
+   schaltet ihre Maske hart), also ist das in einer Richtung besser als das
+   Vorbild und in der anderen gleich. */
+.scroll-edge[data-scroll-start],
+.scroll-edge[data-scroll-end] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-start),
+    #000 calc(100% - var(--fade-end)),
+    transparent 100%
+  );
+}
+
+.scroll-edge[data-scroll-start] {
+  --fade-start: var(--scroll-fade);
+}
+
+.scroll-edge[data-scroll-end] {
+  --fade-end: var(--scroll-fade);
+}
+
+/* Die Fühler: je ein Streifen von 1 px an einer Kante des INHALTS.
+
+   Der obere steht absolut und kostet damit in einem Flexkasten keine Fuge.
+   Der untere kann das nicht: Ein absolut positioniertes Kind bezieht sich auf
+   die Polsterbox seines Scrollers, und die ist so hoch wie das Sichtfenster,
+   nicht wie der Inhalt — `inset-block-end: 0` markierte damit die Unterkante
+   des BILDES, und die ist immer sichtbar. Gemessen: `data-scroll-end` kam nie.
+   Er steht deshalb im Fluss und bekommt seine Fuge in ui/scroll-edge.ts als
+   negativen Außenabstand zurückgerechnet. */
+.scroll-edge__sentinel {
+  height: 1px;
+  flex: none;
+  pointer-events: none;
+}
+
+.scroll-edge__sentinel[data-edge='start'] {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+}
+
+/* ── Kamerasucher ─────────────────────────────────────────────────────────── */
+
+.viewfinder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-pair);
+}
+
+.viewfinder[hidden] {
+  display: none;
+}
+
+.viewfinder__frame {
+  position: relative;
+  /* Quadratisch, weil ein QR-Code quadratisch ist — und begrenzt, damit der
+     Sucher nicht die halbe Seite einnimmt. Flat wie jedes Feld: Fläche statt
+     Rahmen. */
+  width: min(100%, 22rem);
+  aspect-ratio: 1;
+  background: var(--surface-fill);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  /* Ohne das schaut das Video an den vier Ecken unter der Rundung hervor:
+     `overflow: hidden` allein beschneidet in manchen Browsern kein Video-
+     Element, das seinen eigenen Renderpfad hat. */
+  isolation: isolate;
+}
+
+.viewfinder__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Vier Eckwinkel statt eines Rahmens: Sie zeigen den Zielbereich, ohne das Bild
+   zu verdecken. Genau so sind Sucher an Messkameras markiert.
+
+   Logische Eigenschaften, obwohl die vier Winkel zusammen symmetrisch sind und
+   ein Spiegeln nichts ändert: Damit gibt es in dieser Datei keine einzige
+   physische Richtungsangabe mehr, die man beim nächsten Mal übersehen könnte.
+   Die Kürzel tl/tr/bl/br meinen jetzt Block- und Inline-Anfang bzw. -Ende. */
+.viewfinder__mark {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--signal);
+}
+
+.viewfinder__mark[data-corner='tl'] {
+  inset-block-start: var(--sp-4);
+  inset-inline-start: var(--sp-4);
+  border-inline-end: 0;
+  border-block-end: 0;
+}
+
+.viewfinder__mark[data-corner='tr'] {
+  inset-block-start: var(--sp-4);
+  inset-inline-end: var(--sp-4);
+  border-inline-start: 0;
+  border-block-end: 0;
+}
+
+.viewfinder__mark[data-corner='bl'] {
+  inset-block-end: var(--sp-4);
+  inset-inline-start: var(--sp-4);
+  border-inline-end: 0;
+  border-block-start: 0;
+}
+
+.viewfinder__mark[data-corner='br'] {
+  inset-block-end: var(--sp-4);
+  inset-inline-end: var(--sp-4);
+  border-inline-start: 0;
+  border-block-start: 0;
+}
+
+.viewfinder__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-pair);
+}
+
+.viewfinder__hint {
+  font-size: var(--t-small);
+  color: var(--ink-3);
+}
+
+/* ── Bild hierher ziehen ──────────────────────────────────────────────────── */
+
+/* Kein Overlay, keine Wolke, kein gestrichelter Kasten über der ganzen Seite:
+   Das Gerät bekommt eine Kante in Signalfarbe. Mehr braucht die Rückmeldung
+   „hier kannst du loslassen" nicht.
+
+   `outline` folgt seit V5 dem Radius der Panels darunter — der Browser rundet
+   eine Kontur automatisch mit, wenn das Element eine hat; hier braucht sie eine
+   eigene, weil `.device` selbst keine trägt. */
+.is-dropping .device {
+  outline: 2px solid var(--signal);
+  outline-offset: var(--sp-3);
+  border-radius: var(--radius-panel);
+}
+
+/* ── Kleinigkeiten ────────────────────────────────────────────────────────── */
+
+/* ── Der Zeilenumbruch in der Tastenzeile ─────────────────────────────────
+   Ein Flexkasten kennt keinen Umbruch an einer bestimmten Stelle, nur einen,
+   der sich ergibt. Erzwungen wird er hier mit einem leeren Element, das die
+   ganze Zeile beansprucht — das ist der übliche Griff und hat eine Nebenwirkung,
+   die man nachmessen muss: Der Platzhalter öffnet eine EIGENE Zeile der Höhe 0,
+   und die Fuge fällt damit zweimal an. Zwischen „Leeren" und der Primärgruppe
+   stehen deshalb 16 px, nicht 8.
+
+   Das bleibt so, und zwar absichtlich: Genau diese Trennung soll die Zeile
+   ausdrücken — links die zerstörerische Handlung, rechts die beiden, die etwas
+   hereinholen. Der Wert ist jetzt nur nicht mehr aus Versehen richtig. */
+/* ── Der erzwungene Umbruch kostet zwei Fugen ─────────────────────────────
+   Ein Flexkasten kennt keinen Umbruch an einer bestimmten Stelle. Erzwungen wird
+   er mit einem leeren Element über die ganze Zeile — und das eröffnet eine eigene
+   Zeile, also fällt die Zeilenfuge davor UND danach an. Zwischen „Leeren" und der
+   Primärgruppe standen deshalb 16 px, zwischen „QR aus Bild" und „Kamera" aber 8:
+   dieselbe Gruppe mit zwei verschiedenen Lücken.
+
+   Ein negativer Außenabstand am Platzhalter behebt das NICHT — probiert und
+   nachgemessen: Die Höhe einer Flexzeile ist nie kleiner als null, der negative
+   Betrag verschwindet also. Stattdessen trägt der Platzhalter die Fuge selbst,
+   und die Zeilenfuge des Kastens wird abgeschaltet. Damit fällt sie genau einmal
+   an, und zwar dort, wo sie hingehört.
+
+   `:has()` und nicht eine eigene Klasse am Kasten: Die Regel gilt genau dann,
+   wenn ein Platzhalter drinsteht — und das ist die Bedingung, um die es geht. Die
+   Tastenzeile des Tresors hat keinen und behält ihre normale Zeilenfuge. */
+.keys:has(.keys__gap) {
+  row-gap: 0;
+}
+
+.keys__gap {
+  flex: 1 1 var(--sp-4);
+  min-width: var(--sp-2);
+  margin-block-start: var(--gap-pair);
+}
+
+/* ── Im Leerzustand trennt der Platzhalter nichts ──────────────────────────
+   Er ist dafür da, die zerstörerische Taste („Leeren", links) von den beiden
+   zu trennen, die etwas hereinholen (rechts). Im Leerzustand ist „Leeren"
+   aber `hidden` — es gibt nichts zu leeren. Der Platzhalter dehnte sich
+   trotzdem und schob die drei verbliebenen Tasten an den rechten Panelrand,
+   wo sie mit nichts mehr fluchteten: nicht mit dem Feld darüber, nicht mit
+   der Beschriftung, nicht mit dem Hinweis darunter.
+
+   Das ist älter als V11 (nachgemessen: vor und nach dem Pass identisch) und
+   fiel erst auf, als der Leerzustand daneben stand. Ohne den Platzhalter
+   beginnt die Tastenzeile dort, wo alles andere im Panel beginnt.
+
+   Die zweite Zeile holt die Zeilenfuge zurück: `.keys:has(.keys__gap)` oben
+   schaltet sie ab, weil der Platzhalter sie sonst doppelt zählt — ohne ihn
+   gibt es nichts zu doppeln. */
+.device[data-stage='vacant'] .keys__gap {
+  display: none;
+}
+
+.device[data-stage='vacant'] .keys:has(.keys__gap) {
+  row-gap: var(--gap-pair);
+}
+
+/* Die Tastenkappe im Fließtext bekommt --radius-inset und nicht die Pille: Eine
+   Kappe mit halbrunden Enden sähe aus wie ein Etikett, nicht wie eine Taste. */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-inset);
+  padding: 0.05em 0.35em;
+  color: var(--ink-2);
+}
+
+@media (max-width: 34rem) {
+  .keys__gap {
+    flex-basis: 100%;
+  }
+}

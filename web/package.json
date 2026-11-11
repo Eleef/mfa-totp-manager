@@ -1,0 +1,45 @@
+{
+  "name": "clockwork",
+  "version": "1.5.4",
+  "private": true,
+  "type": "module",
+  "description": "Clockwork — TOTP Authenticator. RFC 4226 / RFC 6238 selbst implementiert, vollstaendig clientseitig.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run src",
+    "test:watch": "vitest src",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "shots": "node scripts/shoot.mjs",
+    "android": "npm run build && node scripts/android-web.mjs && node scripts/android-icons.mjs && node scripts/android-sync.mjs",
+    "play:graphics": "node scripts/play-graphics.mjs"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@eslint/js": "^10.0.1",
+    "@fontsource-variable/chivo-mono": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@types/node": "^26.1.2",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.9.0",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0",
+    "vite": "^8.2.1",
+    "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0"
+  }
+}
