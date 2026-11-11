@@ -2,6 +2,19 @@ import { getLocale } from './runtime';
 
 const strings = {
   add: ['添加账号', 'Add account'],
+  singleMode: ['逐条添加', 'Single account'],
+  batchMode: ['批量 / 扫码', 'Batch / QR code'],
+  addHelp: [
+    '填写账号信息，提交后保存到此浏览器。',
+    'Enter account details, then submit to save in this browser.',
+  ],
+  accounts: ['我的账号', 'My accounts'],
+  accountCount: ['已保存 {count} 个账号', '{count} saved accounts'],
+  emptyTitle: ['还没有添加账号', 'No accounts yet'],
+  emptyHelp: [
+    '点击上方“添加账号”，保存后即可查看验证码。',
+    'Use Add account above to save your first account and see its code.',
+  ],
   import: ['导入备份', 'Import backup'],
   export: ['导出备份', 'Export backup'],
   edit: ['编辑', 'Edit'],

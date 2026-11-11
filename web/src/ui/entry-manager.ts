@@ -28,9 +28,12 @@ export function startEntryManager(handlers: Handlers) {
   const input = requireElement<HTMLTextAreaElement>(document, '#secrets');
   const host = requireElement(document, '#strips');
   const zone = requireElement(document, '#zone-input');
+  const editor = requireElement(document, '#input-editor');
+  const cameraStop = requireElement<HTMLButtonElement>(document, '#key-camera-stop');
   const clear = requireElement<HTMLButtonElement>(document, '#key-clear');
   const submit = button('submit', submitDraft);
   submit.id = 'manager-submit';
+  submit.classList.remove('key--default');
   submit.classList.add('key--primary');
   clear.before(submit);
   const state = requireElement(document, '#state-text');
@@ -56,9 +59,35 @@ export function startEntryManager(handlers: Handlers) {
   const undoButton = button('undo', () => undo());
   undoButton.id = 'manager-undo';
   toast.append(toastText, undoButton);
-  zone.insertBefore(toolbar, zone.children[1] ?? null);
+  requireElement(document, '.masthead').after(toolbar);
   toolbar.after(help);
-  zone.append(toast);
+  help.after(toast);
+  zone.hidden = true;
+  document.body.classList.add('manager-layout');
+
+  const batchDialog = document.createElement('dialog');
+  batchDialog.classList.add('manager-dialog', 'manager-dialog--batch');
+  batchDialog.id = 'manager-batch-dialog';
+  batchDialog.setAttribute('aria-labelledby', 'manager-batch-title');
+  const batchHeader = document.createElement('div');
+  batchHeader.className = 'manager-dialog-heading';
+  const batchTitle = document.createElement('h2');
+  batchTitle.id = 'manager-batch-title';
+  const batchClose = button('close', () => batchDialog.close());
+  batchHeader.append(batchTitle, batchClose);
+  const batchHelp = document.createElement('p');
+  batchHelp.className = 'manager-help';
+  const batchFeedback = document.createElement('p');
+  batchFeedback.className = 'manager-error';
+  batchFeedback.setAttribute('role', 'alert');
+  batchFeedback.hidden = true;
+  const batchModes = modes('batchMode');
+  batchDialog.append(batchHeader, batchModes, batchHelp, batchFeedback, editor);
+  document.body.append(batchDialog);
+  batchDialog.addEventListener('close', () => {
+    if (!requireElement(document, '#viewfinder').hidden) cameraStop.click();
+    if (!dialog.open) document.querySelector<HTMLButtonElement>('#manager-add')?.focus();
+  });
 
   const dialog = document.createElement('dialog');
   dialog.className = 'manager-dialog';
@@ -67,6 +96,7 @@ export function startEntryManager(handlers: Handlers) {
   dialog.addEventListener('close', () => {
     // Remove sensitive field values from the DOM after every close.
     dialog.replaceChildren();
+    if (!batchDialog.open) document.querySelector<HTMLButtonElement>('#manager-add')?.focus();
   });
   const file = document.createElement('input');
   file.type = 'file';
@@ -75,6 +105,11 @@ export function startEntryManager(handlers: Handlers) {
   document.body.append(file);
   let toastTimer = 0;
   function notify(text: string, canUndo = false): void {
+    if (batchDialog.open && !canUndo) {
+      batchFeedback.textContent = text;
+      batchFeedback.hidden = false;
+      return;
+    }
     window.clearTimeout(toastTimer);
     toast.hidden = false;
     toastText.textContent = text;
@@ -91,6 +126,33 @@ export function startEntryManager(handlers: Handlers) {
     node.textContent = word(label);
     node.addEventListener('click', action);
     return node;
+  }
+  function modes(selected: 'singleMode' | 'batchMode'): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'manager-modes';
+    for (const mode of ['singleMode', 'batchMode'] as const) {
+      const item = button(mode, () => {
+        if (mode === selected) return;
+        if (mode === 'singleMode') {
+          batchDialog.close();
+          edit();
+        } else {
+          dialog.close();
+          openBatch();
+        }
+      });
+      item.classList.toggle('manager-mode--active', mode === selected);
+      item.setAttribute('aria-pressed', String(mode === selected));
+      row.append(item);
+    }
+    return row;
+  }
+  function openBatch(): void {
+    if (handlers.vaultState() === 'locked') return;
+    if (dialog.open) dialog.close();
+    batchFeedback.hidden = true;
+    if (!batchDialog.open) batchDialog.showModal();
+    input.focus();
   }
   function showDialog(title: string, message: string, confirm: Label, action: () => void): void {
     dialog.replaceChildren();
@@ -159,6 +221,8 @@ export function startEntryManager(handlers: Handlers) {
     toolbar.replaceChildren();
     const add = button('add', () => edit());
     add.id = 'manager-add';
+    add.classList.remove('key--default');
+    add.classList.add('key--primary', 'manager-add-primary');
     const importButton = button('import', () => file.click());
     importButton.id = 'manager-import';
     const exportButton = button('export', () => {
@@ -181,7 +245,10 @@ export function startEntryManager(handlers: Handlers) {
     const clearAll = button('clear', requestClear, true);
     clearAll.id = 'manager-clear-all';
     clearAll.disabled = vaultState === 'locked' || !handlers.read().trim();
-    toolbar.append(add, importButton, exportButton, clearAll);
+    const secondary = document.createElement('div');
+    secondary.className = 'manager-toolbar-secondary';
+    secondary.append(importButton, exportButton, clearAll);
+    toolbar.append(add, secondary);
     clear.removeAttribute('data-i18n');
     clear.textContent = word('clearDraft');
     submit.textContent = word('submit');
@@ -194,14 +261,37 @@ export function startEntryManager(handlers: Handlers) {
     state.textContent = storageProblem
       ? word(storageProblem)
       : word(vaultState === 'off' ? 'plain' : vaultState === 'open' ? 'encrypted' : 'locked');
-    help.textContent = storageProblem ? word(storageProblem) : word('unsaved');
+    const entries = parseEntries(handlers.read());
+    help.textContent = storageProblem
+      ? word(storageProblem)
+      : word('accountCount').replace('{count}', String(entries.length));
     help.classList.toggle('manager-help--error', storageProblem !== null);
+    batchTitle.textContent = word('add');
+    batchClose.textContent = word('close');
+    batchHelp.textContent = word('unsaved');
+    // Keep the mode controls translated while retaining the live draft editor.
+    const modeRow = batchDialog.querySelector('.manager-modes');
+    if (modeRow) modeRow.replaceWith(modes('batchMode'));
+    else batchHeader.after(modes('batchMode'));
+    const sectionTitle = requireElement(document, '#zone-codes-label');
+    sectionTitle.removeAttribute('data-i18n');
+    sectionTitle.textContent = word('accounts');
+    const vacantText = requireElement(document, '.vacant__text');
+    vacantText.removeAttribute('data-i18n');
+    vacantText.textContent = word('emptyHelp');
+    const vacantTitle = document.querySelector('#manager-empty-title');
+    if (vacantTitle) vacantTitle.textContent = word('emptyTitle');
+    else {
+      const title = document.createElement('h2');
+      title.id = 'manager-empty-title';
+      title.textContent = word('emptyTitle');
+      vacantText.before(title);
+    }
     footer.textContent = word('footer');
     const intro = document.querySelector('#vault-explain');
     if (intro) intro.textContent = word('plainHelp');
     const vaultStateText = document.querySelector('#vault-state-text');
     if (vaultState === 'off' && vaultStateText) vaultStateText.textContent = word('vaultOff');
-    const entries = parseEntries(handlers.read());
     [...host.children].forEach((element, index) => {
       element.querySelector('.manager-entry-actions')?.remove();
       const entry = entries[index];
@@ -250,6 +340,7 @@ export function startEntryManager(handlers: Handlers) {
       apply(data);
       input.value = '';
       handlers.draftChanged();
+      batchDialog.close();
       notify(word(data.text === original ? 'duplicateDraft' : 'submitted'));
     } catch {
       notify(word('invalidDraft'));
@@ -318,7 +409,21 @@ export function startEntryManager(handlers: Handlers) {
       button('cancel', () => dialog.close()),
       save,
     );
-    form.append(title, name.wrap, source.wrap, password.wrap, show, error, actions);
+    const heading = document.createElement('div');
+    heading.className = 'manager-dialog-heading';
+    heading.append(
+      title,
+      button('close', () => dialog.close()),
+    );
+    form.append(heading);
+    if (!existing) {
+      const help = document.createElement('p');
+      help.className = 'manager-help';
+      help.textContent = word('addHelp');
+      form.append(modes('singleMode'), help);
+      save.textContent = word('submit');
+    }
+    form.append(name.wrap, source.wrap, password.wrap, show, error, actions);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       if (handlers.read() !== original) {
@@ -428,6 +533,7 @@ export function startEntryManager(handlers: Handlers) {
     const nextState = handlers.vaultState();
     if (nextState === 'locked') {
       input.value = '';
+      batchDialog.close();
       undoData = null;
       passwords = {};
       dialog.close();
@@ -466,6 +572,7 @@ export function startEntryManager(handlers: Handlers) {
   return {
     sync,
     draftChanged: paint,
+    openBatch,
     vaultChanged,
     serializeForVault(): string {
       return handlers.read().trim() ? JSON.stringify(backup(handlers.read(), passwords)) : '';

@@ -164,7 +164,7 @@ export function startApp(): void {
     // ist das ERSTE, was jemand mit der Tastatur erreicht, und wenn er nichts
     // tut, hat die Seite ihre Bedienung schon im ersten Schritt widerlegt.
     skip.hidden = wanted === 'vacant';
-    filterBar.hidden = accounts < DENSE_FROM;
+    filterBar.hidden = accounts === 0;
     if (filterBar.hidden && filterField.value !== '') {
       filterField.value = '';
     }
@@ -440,6 +440,7 @@ export function startApp(): void {
       const line = text.trim();
       const existing = input.value.trim();
       input.value = existing === '' ? line : `${existing}\n${line}`;
+      entryManager?.openBatch();
       expandMigrationLines();
       refreshDraft();
       if (!isMigrationUri(line)) {
