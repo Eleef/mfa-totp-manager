@@ -81,8 +81,7 @@ export function startEntryManager(handlers: Handlers) {
   batchFeedback.className = 'manager-error';
   batchFeedback.setAttribute('role', 'alert');
   batchFeedback.hidden = true;
-  const batchModes = modes('batchMode');
-  batchDialog.append(batchHeader, batchModes, batchHelp, batchFeedback, editor);
+  batchDialog.append(batchHeader, batchHelp, batchFeedback, editor);
   document.body.append(batchDialog);
   batchDialog.addEventListener('close', () => {
     if (!requireElement(document, '#viewfinder').hidden) cameraStop.click();
@@ -126,26 +125,6 @@ export function startEntryManager(handlers: Handlers) {
     node.textContent = word(label);
     node.addEventListener('click', action);
     return node;
-  }
-  function modes(selected: 'singleMode' | 'batchMode'): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'manager-modes';
-    for (const mode of ['singleMode', 'batchMode'] as const) {
-      const item = button(mode, () => {
-        if (mode === selected) return;
-        if (mode === 'singleMode') {
-          batchDialog.close();
-          edit();
-        } else {
-          dialog.close();
-          openBatch();
-        }
-      });
-      item.classList.toggle('manager-mode--active', mode === selected);
-      item.setAttribute('aria-pressed', String(mode === selected));
-      row.append(item);
-    }
-    return row;
   }
   function openBatch(): void {
     if (handlers.vaultState() === 'locked') return;
@@ -219,7 +198,7 @@ export function startEntryManager(handlers: Handlers) {
   function paint(): void {
     const vaultState = handlers.vaultState();
     toolbar.replaceChildren();
-    const add = button('add', () => edit());
+    const add = button('add', openBatch);
     add.id = 'manager-add';
     add.classList.remove('key--default');
     add.classList.add('key--primary', 'manager-add-primary');
@@ -269,10 +248,6 @@ export function startEntryManager(handlers: Handlers) {
     batchTitle.textContent = word('add');
     batchClose.textContent = word('close');
     batchHelp.textContent = word('unsaved');
-    // Keep the mode controls translated while retaining the live draft editor.
-    const modeRow = batchDialog.querySelector('.manager-modes');
-    if (modeRow) modeRow.replaceWith(modes('batchMode'));
-    else batchHeader.after(modes('batchMode'));
     const sectionTitle = requireElement(document, '#zone-codes-label');
     sectionTitle.removeAttribute('data-i18n');
     sectionTitle.textContent = word('accounts');
@@ -371,26 +346,23 @@ export function startEntryManager(handlers: Handlers) {
     wrap.append(caption, control);
     return { wrap, control };
   }
-  function edit(index?: number): void {
+  function edit(index: number): void {
     const entries = parseEntries(handlers.read());
-    const existing = index === undefined ? undefined : entries[index];
+    const existing = entries[index];
+    if (!existing) return;
     const original = handlers.read();
     dialog.replaceChildren();
     const form = document.createElement('form');
     const title = document.createElement('h2');
     title.id = 'manager-dialog-title';
-    title.textContent = word(existing ? 'edit' : 'add');
+    title.textContent = word('edit');
     dialog.setAttribute('aria-labelledby', title.id);
-    const name = field('name', existing ? entryLabel(existing, index!) : '');
+    const name = field('name', entryLabel(existing, index));
     name.control.id = 'manager-name';
-    const source = field('source', existing?.source ?? '');
+    const source = field('source', existing.source);
     source.control.id = 'manager-source';
     source.control.required = true;
-    const password = field(
-      'optionalPassword',
-      existing ? (passwords[existing.key] ?? '') : '',
-      'password',
-    );
+    const password = field('optionalPassword', passwords[existing.key] ?? '', 'password');
     password.control.id = 'manager-password';
     const show = button('show', () => {
       password.control.type = password.control.type === 'password' ? 'text' : 'password';
@@ -416,13 +388,6 @@ export function startEntryManager(handlers: Handlers) {
       button('close', () => dialog.close()),
     );
     form.append(heading);
-    if (!existing) {
-      const help = document.createElement('p');
-      help.className = 'manager-help';
-      help.textContent = word('addHelp');
-      form.append(modes('singleMode'), help);
-      save.textContent = word('submit');
-    }
     form.append(name.wrap, source.wrap, password.wrap, show, error, actions);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -433,15 +398,7 @@ export function startEntryManager(handlers: Handlers) {
       try {
         const line = nameEntry(source.control.value, name.control.value);
         const value = password.control.value;
-        if (index === undefined) {
-          const next = [handlers.read().trimEnd(), line].filter(Boolean).join('\n');
-          const nextPasswords = { ...passwords };
-          const added = parseEntries(next).at(-1)!;
-          if (value) nextPasswords[added.key] = value;
-          apply(backup(next, nextPasswords));
-        } else {
-          apply(amendEntry(handlers.read(), passwords, index, line, value));
-        }
+        apply(amendEntry(handlers.read(), passwords, index, line, value));
         dialog.close();
         notify(word('changed'));
       } catch (problem) {

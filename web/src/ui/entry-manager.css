@@ -206,25 +206,6 @@
 .manager-dialog p {
   line-height: 1.7;
 }
-.manager-modes {
-  display: flex;
-  gap: 0.35rem;
-  padding: 0.3rem;
-  border-radius: 0.65rem;
-  background: var(--fill-soft);
-  margin-block-end: 1rem;
-}
-.manager-modes .key {
-  flex: 1;
-  border-radius: 0.45rem;
-  background: transparent;
-  color: var(--ink-2);
-}
-.manager-modes .manager-mode--active {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--elev-1);
-}
 .manager-field {
   display: grid;
   gap: 0.45rem;
